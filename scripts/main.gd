@@ -1,0 +1,560 @@
+extends Control
+## The level editor's window: menus and toolbar on top, the palette on the
+## left, the 3D view in the middle with the Problems / Triggers / Waves /
+## Dialogues tabs under it, and the outline and inspector on the right.
+##
+## Everything edits one EditorDoc. After any change the level is checked
+## again (LevelCheck) and every panel redraws from the data.
+
+const CONTROLS := """Looking around
+  Right-drag: look around          Wheel: zoom
+  Middle-drag or Shift + right-drag: slide the view
+  Arrow keys or W A S D: slide the view        T: top-down view
+  F: centre on the selection
+
+Building
+  Click something in the Place list, then click in the view. Keep clicking to place more.
+  Esc or right-click: stop placing
+  Click: select        Drag: move        Hold Alt while dragging: no snapping
+  R: turn a quarter turn (Shift + R the other way)
+  Page Up / Page Down: raise / lower by half a metre
+  Ctrl + D: duplicate        Delete: remove
+
+Layers
+  1, 2, 3: Map, Interaction, Combat. Only the current layer's things can be clicked.
+
+Files
+  Ctrl + S: save      Ctrl + Z / Ctrl + Y: undo / redo
+  Ctrl + E: check and export      F5: playtest in the game"""
+
+var doc: EditorDoc
+var layer := 1
+var problems: Array = []
+var snap_step := 0.5
+var place_wave := 1
+
+var view: LevelView
+var dialogs: Dialogs
+var palette: Palette
+var outline: Outline
+var inspector: Inspector
+var bottom: BottomPanels
+
+var _layer_buttons: Array[Button] = []
+var _status: Label
+var _counts: Label
+var _badge: Button
+var _undo: Button
+var _redo: Button
+var _body: Control
+var _empty: Control
+var _view_menu: PopupMenu
+var _toast_until := 0
+
+
+func _ready() -> void:
+	get_tree().auto_accept_quit = false
+	dialogs = Dialogs.new()
+	dialogs.app = self
+	add_child(dialogs)
+	_build()
+	_refresh_all()
+	if DisplayServer.get_name() != "headless":
+		dialogs.welcome.call_deferred()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		dialogs.leave_level(func() -> void: get_tree().quit())
+
+
+# --- Layout -----------------------------------------------------------------------------------
+
+func _build() -> void:
+	var root := VBoxContainer.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(root)
+	var back := ColorRect.new()
+	back.color = Color(0.13, 0.14, 0.17)
+	back.set_anchors_preset(Control.PRESET_FULL_RECT)
+	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(back)
+	move_child(back, 0)
+
+	var bar := HBoxContainer.new()
+	bar.add_theme_constant_override("separation", 6)
+	root.add_child(bar)
+	_menu(bar, "File", [["New level...   Ctrl+N", func() -> void: dialogs.leave_level(dialogs.new_level)],
+		["Open...   Ctrl+O", func() -> void: dialogs.leave_level(dialogs.welcome)],
+		["Save   Ctrl+S", save_level], ["Check and export...   Ctrl+E", export_level], [],
+		["Settings...", dialogs.settings], ["Quit", func() -> void: dialogs.leave_level(func() -> void: get_tree().quit())]])
+	_menu(bar, "Level", [["Level settings...", func() -> void: _need_doc(dialogs.level_settings)],
+		["Imported models...", func() -> void: _need_doc(dialogs.models)],
+		["Import a model...", func() -> void: _need_doc(dialogs.import_model)], [],
+		["Playtest in the game   F5", playtest]])
+	_view_menu = _menu(bar, "View", [["Top-down view   T", func() -> void: toggle_top()],
+		["Show the other layers' things", func() -> void: _toggle_view_option(1)],
+		["Show trigger lines", func() -> void: _toggle_view_option(2)], [],
+		["Show the whole level", func() -> void: view.focus("")]])
+	for i in 3:
+		_view_menu.set_item_as_checkable(i, true)
+	_view_menu.set_item_checked(1, true)
+	_view_menu.set_item_checked(2, true)
+	_menu(bar, "Help", [["Controls", func() -> void: dialogs.tell("Controls", CONTROLS)],
+		["About layers", func() -> void: dialogs.tell("The three layers", "\n\n".join(Catalog.LAYER_HELP.values()))]])
+	bar.add_child(VSeparator.new())
+	var group := ButtonGroup.new()
+	for n in [1, 2, 3]:
+		var b := Button.new()
+		b.text = "%d  %s" % [n, Catalog.LAYER_NAMES[n]]
+		b.tooltip_text = Catalog.LAYER_HELP[n] + "  (Press %d)" % n
+		b.toggle_mode = true
+		b.button_group = group
+		b.button_pressed = n == 1
+		b.custom_minimum_size.x = 120
+		b.pressed.connect(func() -> void: set_layer(n))
+		bar.add_child(b)
+		_layer_buttons.append(b)
+	bar.add_child(VSeparator.new())
+	_undo = _tool(bar, "Undo", "Undo (Ctrl+Z)", func() -> void: doc.undo())
+	_redo = _tool(bar, "Redo", "Redo (Ctrl+Y)", func() -> void: doc.redo())
+	bar.add_child(VSeparator.new())
+	var snap_label := Label.new()
+	snap_label.text = "Snap"
+	bar.add_child(snap_label)
+	var snap := OptionButton.new()
+	snap.tooltip_text = "How things line up when you move or place them. Rooms and corridors always use the 4 m grid. Hold Alt while dragging to turn snapping off for a moment."
+	for spec in [[4.0, "4 m"], [1.0, "1 m"], [0.5, "0.5 m"], [0.0, "Off"]]:
+		snap.add_item(spec[1])
+		snap.set_item_metadata(snap.item_count - 1, spec[0])
+	snap.select(2)
+	snap.item_selected.connect(func(index: int) -> void: snap_step = float(snap.get_item_metadata(index)))
+	bar.add_child(snap)
+	bar.add_child(VSeparator.new())
+	_tool(bar, "Playtest", "Save and run this level in the game (F5).", playtest)
+	_tool(bar, "Check and export", "Check the level for problems, then export it (Ctrl+E).", export_level)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.add_child(spacer)
+	_badge = _tool(bar, "", "The live level check. Click to see the list.", func() -> void: bottom.show_tab("Problems"))
+
+	_empty = CenterContainer.new()
+	_empty.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var empty_box := VBoxContainer.new()
+	var empty_label := Label.new()
+	empty_label.text = "No level open"
+	empty_label.add_theme_font_size_override("font_size", 24)
+	empty_box.add_child(empty_label)
+	_tool(empty_box, "New level...", "", dialogs.new_level)
+	_tool(empty_box, "Open a level...", "", dialogs.welcome)
+	_empty.add_child(empty_box)
+	root.add_child(_empty)
+
+	var split := HSplitContainer.new()
+	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_body = split
+	root.add_child(split)
+	palette = Palette.new()
+	palette.app = self
+	split.add_child(_padded(palette))
+	var right_split := HSplitContainer.new()
+	right_split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	split.add_child(right_split)
+	var middle := VSplitContainer.new()
+	middle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_split.add_child(middle)
+	view = LevelView.new()
+	view.app = self
+	view.hint.connect(func(text: String) -> void: _set_hint(text))
+	view.placed.connect(func(_id: String) -> void: pass)
+	middle.add_child(view)
+	bottom = BottomPanels.new()
+	bottom.app = self
+	middle.add_child(bottom)
+	var right := VSplitContainer.new()
+	right.custom_minimum_size.x = 360
+	right_split.add_child(right)
+	outline = Outline.new()
+	outline.app = self
+	outline.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	outline.size_flags_stretch_ratio = 1.0
+	right.add_child(outline)
+	inspector = Inspector.new()
+	inspector.app = self
+	var inspector_box := _padded(inspector)
+	inspector_box.size_flags_stretch_ratio = 2.5
+	right.add_child(inspector_box)
+
+	var status := HBoxContainer.new()
+	root.add_child(status)
+	_status = Label.new()
+	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_status.clip_text = true
+	status.add_child(_status)
+	_counts = Label.new()
+	status.add_child(_counts)
+
+
+func _padded(inner: Control) -> MarginContainer:
+	var m := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		m.add_theme_constant_override("margin_" + side, 6)
+	m.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	m.add_child(inner)
+	return m
+
+
+func _menu(bar: Container, title: String, entries: Array) -> PopupMenu:
+	var mb := MenuButton.new()
+	mb.text = title
+	mb.flat = false
+	var popup := mb.get_popup()
+	var actions := []
+	for entry in entries:
+		if entry.is_empty():
+			popup.add_separator()
+			actions.append(Callable())
+		else:
+			popup.add_item(entry[0])
+			actions.append(entry[1])
+	popup.index_pressed.connect(func(index: int) -> void:
+		var action: Callable = actions[index]
+		if action.is_valid():
+			action.call())
+	bar.add_child(mb)
+	return popup
+
+
+func _tool(bar: Container, text: String, tip: String, on_press: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.tooltip_text = tip
+	b.pressed.connect(func() -> void:
+		if doc != null or bar != _body:
+			on_press.call())
+	bar.add_child(b)
+	return b
+
+
+func _need_doc(then: Callable) -> void:
+	if doc != null:
+		then.call()
+
+
+# --- The level --------------------------------------------------------------------------------
+
+func set_doc(new_doc: EditorDoc) -> void:
+	doc = new_doc
+	doc.changed.connect(_on_changed)
+	doc.selection_changed.connect(_on_selection)
+	AppSettings.add_recent(doc.level.dir)
+	Catalog.enemies()
+	view.set_doc(doc)
+	view.focus("")
+	set_layer(1)
+	_refresh_all()
+	_set_hint("")
+
+
+func open_path(path: String) -> void:
+	if path.get_file() == "level.json":
+		path = path.get_base_dir()
+	var opened := EditorDoc.open(path)
+	if opened == null:
+		dialogs.tell("That isn't a level", "There's no level.json in %s. Choose a level's own folder." % path)
+		return
+	set_doc(opened)
+
+
+func save_level() -> void:
+	if doc == null:
+		return
+	var err := doc.save()
+	if err != OK:
+		dialogs.tell("Couldn't save", "The level couldn't be written to %s (%s)." % [doc.level.dir, error_string(err)])
+	else:
+		toast("Saved.")
+
+
+func export_level() -> void:
+	if doc != null:
+		dialogs.export_level()
+
+
+func settings_changed() -> void:
+	Catalog._enemies_from = "?"
+	_refresh_all()
+
+
+func _on_changed() -> void:
+	problems = LevelCheck.run(doc)
+	view.rebuild()
+	inspector.on_changed()
+	outline.refresh()
+	bottom.refresh()
+	_refresh_bars()
+	if layer == 1:
+		palette.refresh()  # imported models may have changed
+
+
+func _on_selection() -> void:
+	view.refresh_overlay()
+	inspector.rebuild()
+	outline.refresh()
+
+
+func _refresh_all() -> void:
+	_empty.visible = doc == null
+	_body.visible = doc != null
+	if doc == null:
+		_refresh_bars()
+		return
+	problems = LevelCheck.run(doc)
+	view.rebuild()
+	palette.refresh()
+	outline.refresh()
+	inspector.rebuild()
+	bottom.refresh()
+	_refresh_bars()
+
+
+func _refresh_bars() -> void:
+	if doc == null:
+		get_window().title = "Nomad's Seekers Level Editor"
+		_badge.text = ""
+		_counts.text = ""
+		return
+	get_window().title = "%s%s - Nomad's Seekers Level Editor" % [doc.level.meta.get("name", "Untitled"), " *" if doc.dirty else ""]
+	_undo.disabled = not doc.can_undo()
+	_redo.disabled = not doc.can_redo()
+	var errors := LevelCheck.errors(problems).size()
+	var warnings := LevelCheck.warnings(problems).size()
+	if errors == 0 and warnings == 0:
+		_badge.text = "No problems"
+		_badge.add_theme_color_override("font_color", Color(0.55, 0.95, 0.6))
+	else:
+		_badge.text = ("%d to fix" % errors if errors > 0 else "") + (", " if errors > 0 and warnings > 0 else "") \
+			+ ("%d to check" % warnings if warnings > 0 else "")
+		_badge.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5) if errors > 0 else Color(1.0, 0.85, 0.45))
+	var lim: Array = LevelData.SIZES.get(String(doc.level.meta.get("size", "")), [0, 0])
+	_counts.text = "%s: %d / %s rooms    %s   " % [doc.level.size_name(), doc.level.room_count(),
+		"1" if lim[1] == 1 else "%d-%d" % [lim[0], lim[1]], "Unsaved changes" if doc.dirty else "Saved"]
+
+
+func set_layer(n: int) -> void:
+	layer = clampi(n, 1, 3)
+	for i in _layer_buttons.size():
+		_layer_buttons[i].set_pressed_no_signal(i + 1 == layer)
+	if doc == null:
+		return
+	view.cancel_place()
+	var kind := doc.kind_of(doc.selected)
+	if kind != "" and EditorDoc.KIND_LAYER[kind] != layer and not (kind == "room" and layer == 3):
+		doc.select("")
+	view.rebuild()
+	palette.refresh()
+	outline.refresh()
+	inspector.rebuild()
+	_set_hint("")
+
+
+func set_place_wave(n: int) -> void:
+	place_wave = maxi(n, 1)
+	palette.set_wave(place_wave)
+
+
+func begin_place(entry: Dictionary) -> void:
+	view.begin_place(entry)
+	view.grab_focus()
+
+
+func toggle_top() -> void:
+	view.set_top_view(not view.is_top_view())
+	_view_menu.set_item_checked(0, view.is_top_view())
+
+
+func _toggle_view_option(index: int) -> void:
+	var on := not _view_menu.is_item_checked(index)
+	_view_menu.set_item_checked(index, on)
+	if index == 1:
+		view.show_all_layers = on
+	else:
+		view.show_wires = on
+	view.rebuild()
+
+
+# --- Acting on the selection --------------------------------------------------------------------
+
+func delete_selected() -> void:
+	if doc == null or doc.selected == "" or doc.selected == EditorDoc.START:
+		return
+	var id := doc.selected
+	var refs := doc.references(id)
+	var go := func() -> void:
+		doc.remove(id)
+		doc.commit()
+	if refs.is_empty():
+		go.call()
+	else:
+		dialogs.ask("Delete %s?" % doc.label_of(id),
+			"Other things use it:\n\n- %s\n\nDelete it anyway? Anything left pointing at it will show up in the Problems tab." % "\n- ".join(refs),
+			"Delete", go)
+
+
+func duplicate_selected() -> void:
+	if doc == null or doc.selected == "":
+		return
+	var id := doc.duplicate_item(doc.selected)
+	if id != "":
+		doc.select(id)
+		doc.commit()
+
+
+func rotate_selected(degrees: float) -> void:
+	if view.is_placing():
+		view.rotate_placing(degrees)
+		return
+	var it := doc.item(doc.selected)
+	if it.is_empty():
+		return
+	Items.rotate(it.kind, it.data, degrees)
+	doc.commit()
+
+
+func raise_selected(by: float) -> void:
+	var it := doc.item(doc.selected)
+	if it.is_empty():
+		return
+	Items.set_pos(it.kind, it.data, Items.get_pos(it.kind, it.data) + Vector3(0, by, 0))
+	doc.commit("raise:" + doc.selected)
+
+
+## Jumps to whatever a problem points at.
+func go_to_problem(p: Dictionary) -> void:
+	var id := String(p.get("id", ""))
+	if id.begins_with("rule:"):
+		set_layer(2)
+		bottom.select_rule(id.trim_prefix("rule:"))
+	elif id.begins_with("dialogue:"):
+		set_layer(2)
+		bottom.show_dialogue(id.trim_prefix("dialogue:"))
+	elif id != "":
+		var kind := doc.kind_of(id)
+		if kind != "":
+			set_layer(int(p.get("layer", EditorDoc.KIND_LAYER[kind])) if kind == "room" else EditorDoc.KIND_LAYER[kind])
+			doc.select(id)
+			view.focus(id)
+	else:
+		set_layer(int(p.get("layer", layer)))
+		if String(p.text).contains("Level settings"):
+			dialogs.level_settings()
+
+
+# --- Playtest -----------------------------------------------------------------------------------
+
+func playtest() -> void:
+	if doc == null:
+		return
+	var explicit := String(AppSettings.get_value("run_with", "")) != ""
+	if not AppSettings.has_game() and not explicit:
+		dialogs.tell("Where's the game?", "To playtest, the editor needs to know where Nomad's Seekers is. Open File > Settings and choose the game folder.")
+		return
+	if AppSettings.has_game() and not FileAccess.file_exists(AppSettings.game_dir().path_join("scripts/levels/data_level.gd")):
+		dialogs.tell("This copy of the game can't load editor levels", "The game folder doesn't have level loading yet (it arrives with Part 13a). Update the game, then try again.")
+		return
+	save_level()
+	var args := PackedStringArray()
+	if AppSettings.has_game():
+		args.append_array(["--path", AppSettings.game_dir()])
+	args.append_array(["--", "--level=" + doc.level.dir])
+	var pid := OS.create_process(AppSettings.run_with(), args)
+	if pid < 0:
+		dialogs.tell("Couldn't start the game", "Running %s didn't work. Check \"Run the game with\" in Settings." % AppSettings.run_with())
+	else:
+		var errors := LevelCheck.errors(problems).size()
+		toast("Playtest started." + (" The level still has %d problem(s) to fix, so parts may not work." % errors if errors > 0 else ""))
+
+
+# --- Status bar ---------------------------------------------------------------------------------
+
+func _set_hint(text: String) -> void:
+	if text == "" and doc != null:
+		text = Catalog.LAYER_HELP[layer]
+		palette.clear_pressed()
+	_status.text = "  " + text
+	_status.remove_theme_color_override("font_color")
+	_toast_until = 0
+
+
+## A short message in the status bar.
+func toast(text: String) -> void:
+	_status.text = "  " + text
+	_status.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
+	_toast_until = Time.get_ticks_msec() + 6000
+
+
+func _process(_delta: float) -> void:
+	if _toast_until > 0 and Time.get_ticks_msec() > _toast_until and not view.is_placing():
+		_set_hint("")
+
+
+# --- Keys ---------------------------------------------------------------------------------------
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed:
+		return
+	var handled := true
+	if key.ctrl_pressed or key.meta_pressed:
+		match key.keycode:
+			KEY_S:
+				save_level()
+			KEY_N:
+				dialogs.leave_level(dialogs.new_level)
+			KEY_O:
+				dialogs.leave_level(dialogs.welcome)
+			KEY_E:
+				export_level()
+			KEY_Z:
+				if doc:
+					if key.shift_pressed:
+						doc.redo()
+					else:
+						doc.undo()
+			KEY_Y:
+				if doc:
+					doc.redo()
+			KEY_D:
+				duplicate_selected()
+			_:
+				handled = false
+	elif doc == null or key.echo:
+		handled = false
+	else:
+		match key.keycode:
+			KEY_1, KEY_2, KEY_3:
+				set_layer(key.keycode - KEY_0)
+			KEY_DELETE, KEY_BACKSPACE:
+				delete_selected()
+			KEY_R:
+				rotate_selected(-90.0 if key.shift_pressed else 90.0)
+			KEY_F:
+				view.focus(doc.selected)
+			KEY_T:
+				toggle_top()
+			KEY_PAGEUP:
+				raise_selected(0.5)
+			KEY_PAGEDOWN:
+				raise_selected(-0.5)
+			KEY_F5:
+				playtest()
+			KEY_ESCAPE:
+				if view.is_placing():
+					view.cancel_place()
+					_set_hint("")
+				else:
+					doc.select("")
+			_:
+				handled = false
+	if handled:
+		get_viewport().set_input_as_handled()
