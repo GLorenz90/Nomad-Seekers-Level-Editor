@@ -1,0 +1,116 @@
+[
+	{
+		"id": "caustic_ooze",
+		"name": "Caustic Ooze",
+		"type": 4,
+		"shape": 2,
+		"color": [
+			0.3,
+			0.75,
+			0.6
+		],
+		"size": [
+			1.8,
+			1.3,
+			1.8
+		],
+		"hover": 0.0,
+		"aggro": 14.0,
+		"style": 0
+	},
+	{
+		"id": "grub_hound",
+		"name": "Grub Hound",
+		"type": 0,
+		"shape": 0,
+		"color": [
+			0.55,
+			0.38,
+			0.25
+		],
+		"size": [
+			1.0,
+			1.4,
+			1.3
+		],
+		"hover": 0.0,
+		"aggro": 14.0,
+		"style": 0
+	},
+	{
+		"id": "lumen_sprite",
+		"name": "Lumen Sprite",
+		"type": 5,
+		"shape": 2,
+		"color": [
+			1.0,
+			0.92,
+			0.55
+		],
+		"size": [
+			0.6,
+			0.6,
+			0.6
+		],
+		"hover": 1.3,
+		"aggro": 14.0,
+		"style": 2
+	},
+	{
+		"id": "mutated_crawler",
+		"name": "Mutated Crawler",
+		"type": 1,
+		"shape": 1,
+		"color": [
+			0.45,
+			0.7,
+			0.3
+		],
+		"size": [
+			0.8,
+			0.9,
+			1.2
+		],
+		"hover": 0.0,
+		"aggro": 14.0,
+		"style": 0
+	},
+	{
+		"id": "sentry_drone",
+		"name": "Sentry Drone",
+		"type": 2,
+		"shape": 1,
+		"color": [
+			0.55,
+			0.58,
+			0.62
+		],
+		"size": [
+			1.0,
+			1.2,
+			1.0
+		],
+		"hover": 0.4,
+		"aggro": 14.0,
+		"style": 1
+	},
+	{
+		"id": "umbral_eye",
+		"name": "Umbral Eye",
+		"type": 3,
+		"shape": 2,
+		"color": [
+			0.35,
+			0.2,
+			0.5
+		],
+		"size": [
+			1.1,
+			1.1,
+			1.1
+		],
+		"hover": 1.0,
+		"aggro": 14.0,
+		"style": 2
+	}
+]
