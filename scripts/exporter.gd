@@ -54,6 +54,9 @@ static func to_folder(level: LevelData, dest: String) -> String:
 				err = DirAccess.copy_absolute(assets_from.path_join(file), dest.path_join("assets").path_join(file))
 				if err != OK:
 					return "Couldn't copy %s (%s)." % [file, error_string(err)]
+	var license_problem := Licenses.copy_to(level, dest)
+	if license_problem != "":
+		return license_problem
 	err = copy.save_dir(dest)
 	if err != OK:
 		return "Couldn't write the level files (%s)." % error_string(err)

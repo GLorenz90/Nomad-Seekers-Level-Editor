@@ -4,9 +4,6 @@ extends Node
 ## settings, imported models, the trigger editor, export, and the small
 ## "are you sure" questions.
 
-const LICENSES := [["", "Choose a license..."], ["CC0", "CC0 (public domain)"], ["CC-BY", "CC-BY (credit the author)"],
-	["CC-BY-SA", "CC-BY-SA (credit, share alike)"], ["Own work", "I made it myself"], ["Other", "Other (I have permission)"]]
-
 var app: Node
 var _open: Window
 var _rule := {}
@@ -22,13 +19,14 @@ func _doc() -> EditorDoc:
 
 func _show(dialog: Window, min_size := Vector2i(520, 0)) -> void:
 	if _open and is_instance_valid(_open):
+		_open.hide()  # gives up being the exclusive window right away
 		_open.queue_free()
 	_open = dialog
 	dialog.min_size = min_size
 	app.add_child(dialog)
 	dialog.popup_centered()
 	dialog.close_requested.connect(dialog.queue_free)
-	if dialog is AcceptDialog:
+	if dialog is AcceptDialog and not (dialog as AcceptDialog).canceled.is_connected(dialog.queue_free):
 		(dialog as AcceptDialog).canceled.connect(dialog.queue_free)
 
 
@@ -160,6 +158,7 @@ func pick_file(mode: FileDialog.FileMode, title: String, filters: PackedStringAr
 		fd.current_dir = start_dir
 	fd.file_selected.connect(on_pick)
 	fd.dir_selected.connect(on_pick)
+	fd.files_selected.connect(on_pick)
 	app.add_child(fd)
 	fd.popup_centered_ratio(0.6)
 
@@ -400,16 +399,11 @@ func _import_details(path: String, category := "prefab", folder := "") -> void:
 	var take_materials := CheckBox.new()
 	take_materials.text = "Also add its %d material%s to Materials" % [found, "" if found == 1 else "s"]
 	take_materials.button_pressed = found > 0
-	take_materials.tooltip_text = "Its colors and images become level materials you can paint onto shapes. They share this model's license."
+	take_materials.tooltip_text = "Its colors and images become level materials you can paint onto shapes."
 	if found > 0:
 		box.add_child(take_materials)
 	box.add_child(HSeparator.new())
-	box.add_child(_label("Levels can be shared, so every imported model needs a license you're allowed to share it under.", true))
-	var license := _options(LICENSES, "")
-	_row(box, "License", license)
-	var author := LineEdit.new()
-	author.placeholder_text = "Who made it (for credit)"
-	_row(box, "Author", author)
+	box.add_child(_license_row())
 	box.add_child(HSeparator.new())
 	var surface := _surface_options("obstacle")
 	_row(box, "Acts as", surface, "\n".join(Catalog.SURFACE_HELP.values()))
@@ -424,11 +418,8 @@ func _import_details(path: String, category := "prefab", folder := "") -> void:
 		var key := String(surface.get_item_metadata(index))
 		surface_help.text = String(Catalog.SURFACE_HELP[key])
 		hitbox.disabled = key == "intangible")
-	dialog.get_ok_button().disabled = true
-	license.item_selected.connect(func(index: int) -> void: dialog.get_ok_button().disabled = String(license.get_item_metadata(index)) == "")
 	dialog.confirmed.connect(func() -> void:
-		var problem := import_file(path, String(license.get_selected_metadata()), author.text.strip_edges(),
-			String(surface.get_selected_metadata()), String(hitbox.get_selected_metadata()),
+		var problem := import_file(path, String(surface.get_selected_metadata()), String(hitbox.get_selected_metadata()),
 			String(where.get_selected_metadata()), _folder_text(folder_edit), found > 0 and take_materials.button_pressed)
 		dialog.queue_free()
 		if problem != "":
@@ -481,7 +472,7 @@ func _model_materials(path: String) -> int:
 
 ## Copies a model into the level's assets folder and lists it. Returns ""
 ## or what went wrong.
-func import_file(path: String, license: String, author: String, surface := "obstacle", hitbox := "concave",
+func import_file(path: String, surface := "obstacle", hitbox := "concave",
 		category := "prefab", folder := "", with_materials := false) -> String:
 	var doc := _doc()
 	var ext := path.get_extension().to_lower()
@@ -517,11 +508,11 @@ func import_file(path: String, license: String, author: String, surface := "obst
 	if test.append_from_file(dest, GLTFState.new()) != OK:
 		DirAccess.remove_absolute(dest)
 		return "That file couldn't be read as a glTF model."
-	var entry := {"id": id, "file": "assets/" + id + "." + ext, "license": license, "author": author,
+	var entry := {"id": id, "file": "assets/" + id + "." + ext,
 		"surface": surface, "hitbox": hitbox, "category": category}
 	doc.set_folder(entry, folder)
 	doc.level.map.assets.append(entry)
-	var made := extract_materials(dest, id, license, author) if with_materials else []
+	var made := extract_materials(dest, id) if with_materials else []
 	doc.commit()
 	app.toast("Imported \"%s\" as %s, under %s%s.%s" % [id, String(Catalog.SURFACE_NAMES[surface]).to_lower(),
 		"Prefabs" if category == "prefab" else "Decorations", " / " + EditorDoc.clean_folder(folder) if EditorDoc.clean_folder(folder) != "" else "",
@@ -532,7 +523,7 @@ func import_file(path: String, license: String, author: String, surface := "obst
 ## Turns a glTF model's materials into level materials (their images saved
 ## as PNGs in assets/), in a Materials folder named after the model.
 ## Returns the new material ids.
-func extract_materials(model_path: String, model_id: String, license: String, author: String) -> Array:
+func extract_materials(model_path: String, model_id: String) -> Array:
 	var doc := _doc()
 	var state := GLTFState.new()
 	if GLTFDocument.new().append_from_file(model_path, state) != OK:
@@ -547,7 +538,7 @@ func extract_materials(model_path: String, model_id: String, license: String, au
 			continue
 		var label := base.resource_name if base.resource_name != "" else "%s %d" % [model_id.capitalize(), n]
 		var id := _unique_material_id(EditorDoc.slug(model_id + "_" + label))
-		var spec := {"id": id, "name": label, "folder": model_id.capitalize(), "license": license, "author": author,
+		var spec := {"id": id, "name": label, "folder": model_id.capitalize(),
 			"color": [snappedf(base.albedo_color.r, 0.001), snappedf(base.albedo_color.g, 0.001), snappedf(base.albedo_color.b, 0.001)],
 			"roughness": snappedf(base.roughness, 0.01), "metallic": snappedf(base.metallic, 0.01), "tile": 2.0}
 		for pair in [["albedo", base.albedo_texture], ["normal", base.normal_texture if base.normal_enabled else null]]:
@@ -650,13 +641,7 @@ func material_dialog(id := "", image_path := "", folder := "") -> void:
 	var strength := _spin_box(float(spec.get("normal_strength", 1.0)), 0.0, 4.0, 0.1)
 	_row(box, "Normal strength", strength)
 	box.add_child(HSeparator.new())
-	box.add_child(_label("Images need a license you're allowed to share them under.", true))
-	var license := _options(LICENSES, String(spec.get("license", "")))
-	_row(box, "License", license)
-	var author := LineEdit.new()
-	author.text = String(spec.get("author", ""))
-	author.placeholder_text = "Who made the images (for credit)"
-	_row(box, "Author", author)
+	box.add_child(_license_row())
 	dialog.confirmed.connect(func() -> void:
 		var problem := ""
 		for k in ["albedo", "normal"]:
@@ -677,8 +662,6 @@ func material_dialog(id := "", image_path := "", folder := "") -> void:
 		spec.roughness = rough.value
 		spec.metallic = metal.value
 		spec.normal_strength = strength.value
-		spec.license = String(license.get_selected_metadata())
-		spec.author = author.text.strip_edges()
 		if existing.is_empty():
 			spec.id = _unique_material_id(EditorDoc.slug(String(spec.name)))
 			doc.level.map.materials.append(spec)
@@ -742,11 +725,6 @@ func models() -> void:
 		name_label.text = "%s  (placed %d time(s))" % [a.id, used]
 		name_label.custom_minimum_size.x = 220
 		row.add_child(name_label)
-		var license := _options(LICENSES, String(a.get("license", "")))
-		license.item_selected.connect(func(index: int) -> void:
-			a.license = license.get_item_metadata(index)
-			doc.commit())
-		row.add_child(license)
 		var surface := _surface_options(String(a.get("surface", "obstacle")))
 		surface.tooltip_text = "\n".join(Catalog.SURFACE_HELP.values())
 		var hitbox := _hitbox_options(String(a.get("hitbox", "concave")))
@@ -761,14 +739,6 @@ func models() -> void:
 			doc.commit())
 		row.add_child(surface)
 		row.add_child(hitbox)
-		var author := LineEdit.new()
-		author.text = String(a.get("author", ""))
-		author.placeholder_text = "Author"
-		author.custom_minimum_size.x = 150
-		author.text_changed.connect(func(text: String) -> void:
-			a.author = text
-			doc.commit("asset:author"))
-		row.add_child(author)
 		var remove := Button.new()
 		remove.text = "Remove"
 		remove.disabled = used > 0
@@ -779,14 +749,138 @@ func models() -> void:
 			models())
 		row.add_child(remove)
 		box.add_child(row)
+	var buttons := HBoxContainer.new()
 	var add := Button.new()
 	add.text = "Import a model..."
 	add.pressed.connect(func() -> void:
 		dialog.queue_free()
 		import_model())
-	box.add_child(add)
+	buttons.add_child(add)
+	var lic := Button.new()
+	lic.text = "Licenses..."
+	lic.pressed.connect(func() -> void:
+		dialog.queue_free()
+		licenses())
+	buttons.add_child(lic)
+	box.add_child(buttons)
 	dialog.confirmed.connect(dialog.queue_free)
-	_show(dialog, Vector2i(1000, 0))
+	_show(dialog, Vector2i(820, 0))
+
+
+# --- Licenses ---------------------------------------------------------------------------------
+
+## An optional "came with a license?" line for the import and material
+## dialogs: adds files to the level's licenses folder straight away.
+func _license_row() -> Control:
+	var row := HBoxContainer.new()
+	var note := _label("Came with a license? Keep it with the level (optional).", true)
+	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(note)
+	var add := Button.new()
+	add.text = "Add a license file..."
+	add.tooltip_text = "Copies it into the level's licenses folder (Level > Licenses). It goes along when you export or share the level."
+	add.pressed.connect(func() -> void:
+		pick_license_files(func(added: PackedStringArray) -> void:
+			if not added.is_empty():
+				note.text = "Added " + ", ".join(added) + "."))
+	row.add_child(add)
+	return row
+
+
+## Picks license files and copies them in; on_done gets the names kept.
+func pick_license_files(on_done := Callable()) -> void:
+	pick_file(FileDialog.FILE_MODE_OPEN_FILES, "Add license files", PackedStringArray(Licenses.FILTERS), func(paths: Variant) -> void:
+		var list: PackedStringArray = paths if paths is PackedStringArray else PackedStringArray([String(paths)])
+		var added := PackedStringArray()
+		var skipped := PackedStringArray()
+		for path in list:
+			var name := Licenses.add_file(_doc().level, path)
+			if name == "":
+				skipped.append(path.get_file())
+			else:
+				added.append(name)
+		if not skipped.is_empty():
+			app.toast("Skipped %s: licenses can be .txt, .md, .pdf, .rtf or .html files, or a file with no extension like LICENSE." % ", ".join(skipped))
+		if on_done.is_valid():
+			on_done.call(added))
+
+
+## Level > Licenses: the level's license files, to add, write, open or remove.
+func licenses() -> void:
+	var doc := _doc()
+	var dialog := AcceptDialog.new()
+	dialog.title = "Licenses"
+	dialog.ok_button_text = "Done"
+	var box := _vbox(dialog)
+	box.add_child(_label("One place for the licenses of anything you bring into this level: the License.txt from a model or texture pack, a note from the artist, your own terms. It's optional. The files are kept in the level's licenses folder and go along with it when you export or share it.", true))
+	var files := Licenses.list(doc.level)
+	if files.is_empty():
+		box.add_child(_label("No licenses yet.", true))
+	for f in files:
+		var row := HBoxContainer.new()
+		var name_label := Label.new()
+		name_label.text = f
+		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(name_label)
+		var open := Button.new()
+		open.text = "Open"
+		open.pressed.connect(func() -> void: OS.shell_open(Licenses.folder(doc.level).path_join(f)))
+		row.add_child(open)
+		var remove := Button.new()
+		remove.text = "Remove"
+		remove.pressed.connect(func() -> void:
+			ask("Remove %s?" % f, "The file is deleted from the level's licenses folder.", "Remove", func() -> void:
+				Licenses.remove(doc.level, f)
+				licenses.call_deferred()))
+		row.add_child(remove)
+		box.add_child(row)
+	var buttons := HBoxContainer.new()
+	var add := Button.new()
+	add.text = "Add files..."
+	add.pressed.connect(func() -> void:
+		pick_license_files(func(_added: PackedStringArray) -> void:
+			if is_instance_valid(dialog):
+				dialog.queue_free()
+			licenses()))
+	buttons.add_child(add)
+	var write := Button.new()
+	write.text = "Write one..."
+	write.pressed.connect(func() -> void:
+		dialog.queue_free()
+		_write_license())
+	buttons.add_child(write)
+	var folder := Button.new()
+	folder.text = "Open the folder"
+	folder.pressed.connect(func() -> void:
+		DirAccess.make_dir_recursive_absolute(Licenses.folder(doc.level))
+		OS.shell_open(Licenses.folder(doc.level)))
+	buttons.add_child(folder)
+	box.add_child(buttons)
+	dialog.confirmed.connect(dialog.queue_free)
+	_show(dialog, Vector2i(620, 0))
+
+
+func _write_license() -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Write a license"
+	dialog.ok_button_text = "Save"
+	var box := _vbox(dialog)
+	var title := LineEdit.new()
+	title.placeholder_text = "Like: Forest pack by Kenney (CC0)"
+	_row(box, "Name", title)
+	var text := TextEdit.new()
+	text.placeholder_text = "The license, or who made what and how it may be used."
+	text.custom_minimum_size = Vector2(520, 220)
+	text.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	box.add_child(text)
+	dialog.confirmed.connect(func() -> void:
+		Licenses.write(_doc().level, title.text, text.text)
+		dialog.queue_free()
+		licenses())
+	dialog.canceled.connect(func() -> void:
+		dialog.queue_free()
+		licenses())
+	_show(dialog)
 
 
 func _surface_options(current: String) -> OptionButton:

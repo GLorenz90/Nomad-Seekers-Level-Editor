@@ -110,7 +110,7 @@ func _init() -> void:
 	doc.commit()
 
 	# Model surfaces and per-copy overrides.
-	doc.level.map.assets.append({"id": "rock", "file": "assets/rock.glb", "license": "CC0", "surface": "obstacle", "hitbox": "convex"})
+	doc.level.map.assets.append({"id": "rock", "file": "assets/rock.glb", "surface": "obstacle", "hitbox": "convex"})
 	var p := {"asset": "rock"}
 	check(doc.level.surface_of(p) == "obstacle" and doc.level.hitbox_of(p) == "convex", "a copy uses its model's surface and hitbox")
 	p.surface = "floor"

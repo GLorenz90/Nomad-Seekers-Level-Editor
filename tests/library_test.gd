@@ -75,7 +75,7 @@ func _init() -> void:
 	var model_path := "/tmp/library_stump.glb"
 	make_model(model_path)
 	check(app.dialogs._model_materials(model_path) == 1, "the import dialog finds the model's material")
-	var problem: String = app.dialogs.import_file(model_path, "CC0", "Tester", "obstacle", "convex", "decoration", "Rocks/Small", true)
+	var problem: String = app.dialogs.import_file(model_path, "obstacle", "convex", "decoration", "Rocks/Small", true)
 	await settle()
 	check(problem == "", "a model imports (%s)" % problem)
 	var asset := doc.level.find_asset("library_stump")
@@ -84,7 +84,7 @@ func _init() -> void:
 	var mat: Dictionary = doc.level.map.materials[0] if doc.level.map.materials.size() > 0 else {}
 	check(String(mat.get("albedo", "")) != "" and FileAccess.file_exists(dir.path_join(String(mat.get("albedo", "")))),
 		"with its image saved in the level's assets (%s)" % mat.get("albedo", ""))
-	check(mat.get("license") == "CC0" and mat.get("folder") == "Library Stump", "sharing the model's license, in a folder named after it")
+	check(mat.get("folder") == "Library Stump" and not mat.has("license"), "in a folder named after the model, with no license needed")
 	pal.refresh(true)
 	var lines := "\n".join(pal.outline_text())
 	check(lines.contains("Decorations\n  Rocks\n    Small\n      Library Stump"), "the Place list shows Decorations > Rocks > Small > the model")
@@ -169,11 +169,33 @@ func _init() -> void:
 
 	# Checks and export.
 	check(LevelCheck.errors(LevelCheck.run(doc)).filter(func(p): return String(p.text).contains("material")).is_empty(), "a good material raises no problems")
-	var saved_license := String(mat.license)
-	mat.license = ""
-	doc.commit()
-	check(texts(LevelCheck.run(doc)).contains("has no license for its images"), "a material's images need a license")
-	mat.license = saved_license
+	check(not texts(LevelCheck.run(doc)).to_lower().contains("license"), "nothing asks for a license")
+
+	# Licenses: one optional folder per level.
+	check(Licenses.list(doc.level).is_empty(), "a new level has no licenses")
+	var pack := "/tmp/library_pack"
+	DirAccess.make_dir_recursive_absolute(pack)
+	for spec in [["License.txt", "CC0 1.0 Universal"], ["LICENSE", "MIT License"], ["notes.zip", "PK"]]:
+		var lf := FileAccess.open(pack.path_join(spec[0]), FileAccess.WRITE)
+		lf.store_string(spec[1])
+		lf.close()
+	check(Licenses.add_file(doc.level, pack.path_join("License.txt")) == "License.txt", "a pack's License.txt is added")
+	check(Licenses.add_file(doc.level, pack.path_join("License.txt")) == "License.txt" and Licenses.list(doc.level).size() == 1,
+		"adding the same file again keeps one copy")
+	check(Licenses.add_file(doc.level, pack.path_join("LICENSE")) == "LICENSE.txt", "a LICENSE file with no extension is kept as .txt")
+	check(Licenses.add_file(doc.level, pack.path_join("notes.zip")) == "", "but a zip isn't a license")
+	var written := Licenses.write(doc.level, "Trees by Sam (CC-BY)", "Credit Sam for the trees.")
+	check(written == "Trees by Sam (CC-BY).txt" and FileAccess.get_file_as_string(Licenses.folder(doc.level).path_join(written)).begins_with("Credit Sam"),
+		"a license can be written in the editor (%s)" % written)
+	var other := DirAccess.open(pack)
+	other.make_dir("other")
+	var lf2 := FileAccess.open(pack.path_join("other/License.txt"), FileAccess.WRITE)
+	lf2.store_string("Something else")
+	lf2.close()
+	check(Licenses.add_file(doc.level, pack.path_join("other/License.txt")) == "License (2).txt", "a different file with the same name gets a new one")
+	Licenses.remove(doc.level, "License (2).txt")
+	check(Licenses.list(doc.level) == PackedStringArray(["LICENSE.txt", "License.txt", "Trees by Sam (CC-BY).txt"]),
+		"and removing one leaves the rest (%s)" % ", ".join(Licenses.list(doc.level)))
 	doc.find(curve).material = "gone"
 	doc.commit()
 	check(texts(LevelCheck.run(doc)).contains("isn't in the level (\"gone\")"), "painting with a missing material is caught")
@@ -189,6 +211,27 @@ func _init() -> void:
 	check(exported != null and exported.find_material("unused").is_empty() and not exported.find_material(String(mat.id)).is_empty(),
 		"and leaves out materials nothing uses")
 	check(exported != null and exported.find_asset("library_stump").is_empty(), "and models nothing uses")
+	check(Licenses.list(exported).size() == 3, "export takes the licenses folder along")
+
+	# The dialogs build: Licenses, import, material and imported models.
+	app.dialogs.licenses()
+	await settle()
+	var shown := app.dialogs._open as Window
+	var labels := shown.find_children("*", "Label", true, false).map(func(l): return (l as Label).text) if shown else []
+	check(shown != null and shown.title == "Licenses" and labels.has("License.txt") and labels.has("Trees by Sam (CC-BY).txt"),
+		"Level > Licenses lists the level's license files")
+	for open_one in [func(): app.dialogs._import_details(model_path), func(): app.dialogs.material_dialog(String(mat.id)), func(): app.dialogs.models()]:
+		open_one.call()
+		await settle()
+		shown = app.dialogs._open as Window
+		var texts_in := shown.find_children("*", "Button", true, false).map(func(x): return (x as Button).text) if shown else []
+		check(shown != null and (texts_in.has("Add a license file...") or texts_in.has("Licenses...")),
+			"%s offers licenses but doesn't ask for one" % (shown.title if shown else "?"))
+		check(shown != null and not shown.find_children("*", "OptionButton", true, false).any(func(o): return (o as OptionButton).get_item_text(0).contains("license")),
+			"  with no license picker")
+		if shown != null and shown is ConfirmationDialog:
+			check(not (shown as ConfirmationDialog).get_ok_button().disabled, "  and OK works without one")
+	shown.queue_free()
 
 	# Deleting a material unpaints what wore it.
 	doc.remove_material(String(mat.id))

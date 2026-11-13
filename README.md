@@ -47,10 +47,16 @@ it makes the level compliant. Its `BUILD_LOG.md` lists each step.
      to bring its textures along. Pick a material in the list, then click pieces to paint them
      (click again to take it off), or set **Material** in the inspector. Materials are mapped
      onto the world, so tiling stays even however you stretch a shape; **Tile** sets how many
-     metres one copy of the image covers. Images need a license, like models.
+     metres one copy of the image covers.
    - **Invisible**: Room boundary and Invisible wall (both drawn as faint boxes so you can see and
      grab them).
    - **Effects**: lights, fireflies, searchlights.
+
+   **Licenses** are optional. **Level > Licenses** is one place per level for the licenses of
+   what you bring in: add files (a pack's License.txt, a LICENSE, a PDF), or write one in the
+   editor. The import and material windows have an "Add a license file..." button for when
+   something comes with one. They're kept in the level's `licenses/` folder and go along with it
+   when you export or share it.
 
    **Folders.** Right-click Decorations, Prefabs or Materials (or a folder) for a new folder;
    folders nest and can be renamed or deleted (what's in a deleted folder moves up a level).
@@ -117,8 +123,8 @@ Must fix, for example:
 - a closed door that nothing opens (give it a trigger, or tick "Stays locked on purpose")
 - a fight in a room that no longer exists
 - no exit teleporter, unknown enemies, empty waves, triggers pointing at deleted things
-- models without a license, or whose file is missing
-- materials whose image is missing or has no license, and pieces painted with a material that's gone
+- models whose file is missing
+- materials whose image is missing, and pieces painted with a material that's gone
 
 Check, for example:
 - a room Seekers can't walk to from the start (bridges and moving platforms count as joining

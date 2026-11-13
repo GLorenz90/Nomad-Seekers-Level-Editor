@@ -324,7 +324,7 @@ func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(dir.path_join("assets"))
 	img.save_png(dir.path_join("assets/flagstone.png"))
 	doc.level.map.materials.append({"id": "flagstone", "name": "Flagstone", "folder": "Stone", "albedo": "assets/flagstone.png",
-		"color": [1, 1, 1], "tile": 4.0, "roughness": 0.9, "license": "CC0", "author": "Nomad's Seekers"})
+		"color": [1, 1, 1], "tile": 4.0, "roughness": 0.9})
 	doc.add("piece", box(Vector3(4, 0, -6.5), Vector3(6, 1, 3), ROCK, "floor"))
 	doc.add("piece", {"asset": "builtin:stairs", "pos": [4, 0, -3.5], "size": [4, 1, 3], "steps": 5, "color": ROCK,
 		"surface": "floor", "material": "flagstone"})

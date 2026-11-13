@@ -165,8 +165,6 @@ static func _check_map(doc: EditorDoc, out: Array) -> void:
 	for a in level.map.assets:
 		var id := String(a.get("id", ""))
 		files[id] = true
-		if String(a.get("license", "")).strip_edges() == "":
-			_add(out, "error", "The imported model \"%s\" has no license. Set one under Level > Imported models." % id, "", 1)
 		if not FileAccess.file_exists(level.dir.path_join(String(a.get("file", "")))):
 			_add(out, "error", "The file for the imported model \"%s\" is missing (%s). Import it again." % [id, a.get("file", "")], "", 1)
 	for key in ["pieces", "decorations"]:
@@ -179,17 +177,13 @@ static func _check_map(doc: EditorDoc, out: Array) -> void:
 	for m in level.map.get("materials", []):
 		var id := String(m.get("id", ""))
 		var shown := String(m.get("name", id))
-		var images := false
 		for key in ["albedo", "normal"]:
 			var file := String(m.get(key, ""))
 			if file == "":
 				continue
-			images = true
 			if not FileAccess.file_exists(level.dir.path_join(file)):
 				_add(out, "error", "The %s image for the material \"%s\" is missing (%s). Pick it again in the material's settings." % [
 					"colour" if key == "albedo" else "normal map", shown, file], "", 1)
-		if images and String(m.get("license", "")).strip_edges() == "":
-			_add(out, "error", "The material \"%s\" has no license for its images. Set one in its settings (right-click it in the Place list)." % shown, "", 1)
 	for p in level.map.pieces:
 		var mat := String(p.get("material", ""))
 		if mat != "" and level.find_material(mat).is_empty():

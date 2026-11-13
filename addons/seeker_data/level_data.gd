@@ -445,8 +445,6 @@ func validate(known_enemies: PackedStringArray = PackedStringArray()) -> PackedS
 	var asset_ids := {}
 	for a in map.assets:
 		asset_ids[String(a.get("id", ""))] = true
-		if String(a.get("license", "")) == "":
-			out.append("Asset %s has no license." % a.get("id", "?"))
 		if a.has("surface") and not SURFACES.has(String(a.surface)):
 			out.append("Asset %s: unknown surface." % a.get("id", "?"))
 		if not safe_file(String(a.get("file", "")), MODEL_FILES):
@@ -456,8 +454,6 @@ func validate(known_enemies: PackedStringArray = PackedStringArray()) -> PackedS
 		for key in ["albedo", "normal"]:
 			if String(m.get(key, "")) != "" and not safe_file(String(m[key]), TEXTURE_FILES):
 				out.append("Material %s: its %s image must be a .png, .jpg or .webp inside the level folder." % [mid, key])
-		if (String(m.get("albedo", "")) != "" or String(m.get("normal", "")) != "") and String(m.get("license", "")) == "":
-			out.append("Material %s has images but no license." % mid)
 	for p in map.pieces:
 		var asset := String(p.get("asset", ""))
 		if asset.begins_with("builtin:"):
