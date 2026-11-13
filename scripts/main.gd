@@ -3,22 +3,28 @@ extends Control
 ## left, the 3D view in the middle with the Problems / Triggers / Waves /
 ## Dialogues tabs under it, and the outline and inspector on the right.
 ##
-## Everything edits one EditorDoc. After any change the level is checked
+## Everything edits one EditorDoc. After any change the navmesh is baked
+## again (a moment later, so dragging stays smooth), the level is checked
 ## again (LevelCheck) and every panel redraws from the data.
 
 const CONTROLS := """Looking around
-  Right-drag: look around          Wheel: zoom
+  Right-drag: look around (hold it and W A S D to fly)          Wheel: zoom
   Middle-drag or Shift + right-drag: slide the view
-  Arrow keys or W A S D: slide the view        T: top-down view
+  Arrow keys: slide the view        T: top-down view
   F: centre on the selection
 
-Building
+Building (like Godot)
   Click something in the Place list, then click in the view. Keep clicking to place more.
-  Esc or right-click: stop placing
-  Click: select        Drag: move        Hold Alt while dragging: no snapping
-  R: turn a quarter turn (Shift + R the other way)
+  R while placing: turn it a quarter turn.    Esc or right-click: stop placing
+  Click: select        Drag: slide along the ground
+  Q: select only    W: move handles    E: rotate handles    R: resize handles
+  Drag a handle to move, turn or resize along it. Hold Alt for no snapping.
   Page Up / Page Down: raise / lower by half a metre
   Ctrl + D: duplicate        Delete: remove
+
+Rooms
+  The colored navmesh is where Seekers can walk; each color is a room.
+  Put a Room boundary across a doorway to split it. N: click picks rooms instead of pieces.
 
 Layers
   1, 2, 3: Map, Interaction, Combat. Only the current layer's things can be clicked.
@@ -31,6 +37,7 @@ var doc: EditorDoc
 var layer := 1
 var problems: Array = []
 var snap_step := 0.5
+var gizmo_mode := TransformGizmo.Mode.MOVE
 var place_wave := 1
 
 var view: LevelView
@@ -50,6 +57,9 @@ var _body: Control
 var _empty: Control
 var _view_menu: PopupMenu
 var _toast_until := 0
+var _nav_due := 0
+var _mode_buttons: Array[Button] = []
+var _pick_rooms: Button
 var _pending := {}
 var _flush_queued := false
 
@@ -102,12 +112,13 @@ func _build() -> void:
 		["Playtest in the game   F5", playtest]])
 	_view_menu = _menu(bar, "View", [["Top-down view   T", func() -> void: toggle_top()],
 		["Show the other layers' things", func() -> void: _toggle_view_option(1)],
-		["Show trigger lines", func() -> void: _toggle_view_option(2)], [],
+		["Show trigger lines", func() -> void: _toggle_view_option(2)],
+		["Show the navmesh", func() -> void: _toggle_view_option(3)], [],
 		["Show the whole level", func() -> void: view.focus("")]])
-	for i in 3:
+	for i in 4:
 		_view_menu.set_item_as_checkable(i, true)
-	_view_menu.set_item_checked(1, true)
-	_view_menu.set_item_checked(2, true)
+	for i in [1, 2, 3]:
+		_view_menu.set_item_checked(i, true)
 	_menu(bar, "Help", [["Controls", func() -> void: dialogs.tell("Controls", CONTROLS)],
 		["Open the starter example", func() -> void: dialogs.leave_level(open_example)],
 		["About layers", func() -> void: dialogs.tell("The three layers", "\n\n".join(Catalog.LAYER_HELP.values()))]])
@@ -125,6 +136,28 @@ func _build() -> void:
 		bar.add_child(b)
 		_layer_buttons.append(b)
 	bar.add_child(VSeparator.new())
+	var modes := ButtonGroup.new()
+	for spec in [[TransformGizmo.Mode.SELECT, "Select", "Q: click to select, no handles."],
+			[TransformGizmo.Mode.MOVE, "Move", "W: arrows to move along an axis; the yellow square slides along the ground."],
+			[TransformGizmo.Mode.ROTATE, "Rotate", "E: rings to turn it (snaps to 15°; hold Alt for free turning)."],
+			[TransformGizmo.Mode.SCALE, "Resize", "R: handles to resize along each side; the white middle cube resizes evenly."]]:
+		var b := Button.new()
+		b.text = spec[1]
+		b.tooltip_text = spec[2]
+		b.toggle_mode = true
+		b.button_group = modes
+		b.button_pressed = spec[0] == gizmo_mode
+		var m: int = spec[0]
+		b.pressed.connect(func() -> void: set_gizmo_mode(m))
+		bar.add_child(b)
+		_mode_buttons.append(b)
+	_pick_rooms = Button.new()
+	_pick_rooms.text = "Click picks: Pieces"
+	_pick_rooms.toggle_mode = true
+	_pick_rooms.tooltip_text = "N: switch between picking pieces and picking rooms (the navmesh). Pick a room to name it, make it a corridor, or join it with another."
+	_pick_rooms.toggled.connect(func(on: bool) -> void: set_pick_rooms(on))
+	bar.add_child(_pick_rooms)
+	bar.add_child(VSeparator.new())
 	_undo = _tool(bar, "Undo", "Undo (Ctrl+Z)", func() -> void: doc.undo())
 	_redo = _tool(bar, "Redo", "Redo (Ctrl+Y)", func() -> void: doc.redo())
 	bar.add_child(VSeparator.new())
@@ -132,7 +165,7 @@ func _build() -> void:
 	snap_label.text = "Snap"
 	bar.add_child(snap_label)
 	var snap := OptionButton.new()
-	snap.tooltip_text = "How things line up when you move or place them. Rooms and corridors always use the 4 m grid. Hold Alt while dragging to turn snapping off for a moment."
+	snap.tooltip_text = "How things line up when you move, place or resize them (rotation snaps to 15°). Hold Alt while dragging to turn snapping off for a moment."
 	for spec in [[4.0, "4 m"], [1.0, "1 m"], [0.5, "0.5 m"], [0.0, "Off"]]:
 		snap.add_item(spec[1])
 		snap.set_item_metadata(snap.item_count - 1, spec[0])
@@ -315,7 +348,9 @@ func settings_changed() -> void:
 
 
 func _on_changed() -> void:
-	problems = LevelCheck.run(doc)
+	# The navmesh (and with it the rooms and the level check) catches up a
+	# moment after the last change.
+	_nav_due = Time.get_ticks_msec() + 200
 	# Note now whether the change came from the inspector or dialogue editor
 	# (so they keep focus while typing); the redraw itself waits for the end
 	# of the frame, so no panel is rebuilt while one of its own controls is
@@ -346,6 +381,7 @@ func _refresh_all() -> void:
 	_body.visible = doc != null
 	if doc != null:
 		problems = LevelCheck.run(doc)
+		view.refresh_nav()
 		for what in ["view", "palette", "outline", "inspector", "bottom", "dialogue"]:
 			_pending[what] = true
 	_pending["bars"] = true
@@ -400,20 +436,22 @@ func _refresh_bars() -> void:
 		_badge.text = ("%d to fix" % errors if errors > 0 else "") + (", " if errors > 0 and warnings > 0 else "") \
 			+ ("%d to check" % warnings if warnings > 0 else "")
 		_badge.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5) if errors > 0 else Color(1.0, 0.85, 0.45))
-	var lim: Array = LevelData.SIZES.get(String(doc.level.meta.get("size", "")), [0, 0])
-	_counts.text = "%s: %d / %s rooms    %s   " % [doc.level.size_name(), doc.level.room_count(),
-		"1" if lim[1] == 1 else "%d-%d" % [lim[0], lim[1]], "Unsaved changes" if doc.dirty else "Saved"]
+	var level := doc.level
+	_counts.text = "%s: %d room%s, %d corridor%s    %s   " % [level.size_name(), level.room_count(),
+		"" if level.room_count() == 1 else "s", level.corridor_count(), "" if level.corridor_count() == 1 else "s",
+		"Unsaved changes" if doc.dirty else "Saved"]
 
 
 func set_layer(n: int) -> void:
 	layer = clampi(n, 1, 3)
 	for i in _layer_buttons.size():
 		_layer_buttons[i].set_pressed_no_signal(i + 1 == layer)
+	_pick_rooms.visible = layer == 1
 	if doc == null:
 		return
 	view.cancel_place()
 	var kind := doc.kind_of(doc.selected)
-	if kind != "" and EditorDoc.KIND_LAYER[kind] != layer and not (kind == "room" and layer == 3):
+	if kind != "" and EditorDoc.KIND_LAYER[kind] != layer and not (kind == "area" and layer == 3):
 		doc.select("")
 	for what in ["view", "palette", "outline", "inspector"]:
 		_pending[what] = true
@@ -441,8 +479,11 @@ func _toggle_view_option(index: int) -> void:
 	_view_menu.set_item_checked(index, on)
 	if index == 1:
 		view.show_all_layers = on
-	else:
+	elif index == 2:
 		view.show_wires = on
+	else:
+		view.show_nav = on
+		view.refresh_nav()
 	view.rebuild()
 
 
@@ -504,7 +545,7 @@ func go_to_problem(p: Dictionary) -> void:
 	elif id != "":
 		var kind := doc.kind_of(id)
 		if kind != "":
-			set_layer(int(p.get("layer", EditorDoc.KIND_LAYER[kind])) if kind == "room" else EditorDoc.KIND_LAYER[kind])
+			set_layer(int(p.get("layer", EditorDoc.KIND_LAYER[kind])) if kind == "area" else EditorDoc.KIND_LAYER[kind])
 			doc.select(id)
 			view.focus(id)
 	else:
@@ -559,6 +600,40 @@ func toast(text: String) -> void:
 func _process(_delta: float) -> void:
 	if _toast_until > 0 and Time.get_ticks_msec() > _toast_until and not view.is_placing():
 		_set_hint("")
+	if _nav_due > 0 and Time.get_ticks_msec() >= _nav_due and doc != null and not view.gizmo.is_dragging():
+		_nav_due = 0
+		_update_nav()
+
+
+## Bakes the navmesh, finds the rooms, checks the level, redraws what changed.
+func _update_nav() -> void:
+	var before: int = doc.level.map.areas.size()
+	doc.update_nav()
+	problems = LevelCheck.run(doc)
+	view.refresh_nav()
+	for what in ["outline", "bottom", "bars", "overlay"]:
+		_pending[what] = true
+	if inspector._shown == "" or doc.kind_of(doc.selected) == "area" or before != doc.level.map.areas.size():
+		_pending["inspector"] = true
+	else:
+		inspector._fill_problems()
+	_schedule()
+
+
+func set_gizmo_mode(m: int) -> void:
+	gizmo_mode = m
+	for i in _mode_buttons.size():
+		_mode_buttons[i].set_pressed_no_signal(i == m)
+	view.gizmo.mode = m
+	view.gizmo.refresh()
+
+
+func set_pick_rooms(on: bool) -> void:
+	view.pick_rooms = on
+	_pick_rooms.set_pressed_no_signal(on)
+	_pick_rooms.text = "Click picks: Rooms" if on else "Click picks: Pieces"
+	if layer == 1:
+		_set_hint("Click a room's navmesh to select it." if on else "")
 
 
 # --- Keys ---------------------------------------------------------------------------------------
@@ -599,8 +674,19 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				set_layer(key.keycode - KEY_0)
 			KEY_DELETE, KEY_BACKSPACE:
 				delete_selected()
+			KEY_Q:
+				set_gizmo_mode(TransformGizmo.Mode.SELECT)
+			KEY_W:
+				set_gizmo_mode(TransformGizmo.Mode.MOVE)
+			KEY_E:
+				set_gizmo_mode(TransformGizmo.Mode.ROTATE)
 			KEY_R:
-				rotate_selected(-90.0 if key.shift_pressed else 90.0)
+				if view.is_placing():
+					view.rotate_placing(-90.0 if key.shift_pressed else 90.0)
+				else:
+					set_gizmo_mode(TransformGizmo.Mode.SCALE)
+			KEY_N:
+				set_pick_rooms(not view.pick_rooms)
 			KEY_F:
 				view.focus(doc.selected)
 			KEY_T:

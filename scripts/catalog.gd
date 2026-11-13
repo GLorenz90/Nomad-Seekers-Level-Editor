@@ -6,7 +6,7 @@ extends RefCounted
 
 const LAYER_NAMES := {1: "Map", 2: "Interaction", 3: "Combat"}
 const LAYER_HELP := {
-	1: "Layer 1: Map. Build the space: rooms, corridors, floors, walls, ramps and decorations.",
+	1: "Layer 1: Map. Build the space from floors, walls and your own models. The navmesh shows where Seekers can walk; room boundaries split it into rooms.",
 	2: "Layer 2: Interaction. Place doors, buttons, teleporters and more, then say what triggers what.",
 	3: "Layer 3: Combat. Place enemies. Enemies inside a room join one of its waves.",
 }
@@ -18,6 +18,14 @@ const OBJECT_NAMES := {"door": "Door", "teleporter": "Teleporter", "lumidium_dep
 
 const FLOOR_COLOR := [0.42, 0.45, 0.4]
 const WALL_COLOR := [0.5, 0.5, 0.56]
+
+const SURFACE_NAMES := {"floor": "Floor", "obstacle": "Obstacle", "intangible": "Intangible"}
+const SURFACE_HELP := {
+	"floor": "Floor: solid, and the navmesh is built on top of it. Seekers and enemies walk on it.",
+	"obstacle": "Obstacle: solid, and blocks the navmesh. Nothing walks on top of it.",
+	"intangible": "Intangible: no collision at all, and the navmesh ignores it. Good for grass, distant scenery, anything animated.",
+}
+const HITBOX_NAMES := {"concave": "Concave (follows every triangle)", "convex": "Convex (one wrapped hull, faster)"}
 
 ## Bundled enemy list, used until the game folder is set (then the game's own
 ## data/enemies folder is read, so new enemies show up by themselves).
@@ -34,34 +42,33 @@ static func palette(layer: int, doc: EditorDoc) -> Array:
 	var out := []
 	match layer:
 		1:
-			out.append(_entry("Room", "A room: counts toward the level's size. Floor and walls are built for you, and doorways open where rooms and corridors touch.",
-				"room", {"kind": "room", "size": [16, 6, 16], "auto_build": true}, "Spaces"))
-			out.append(_entry("Corridor", "A corridor: joins rooms and doesn't count toward the size. Put it against a room and a doorway opens.",
-				"room", {"kind": "corridor", "size": [4, 6, 8], "auto_build": true}, "Spaces"))
-			out.append(_entry("Floor / block", "A solid box: extra floor, a step, a pillar, a ledge.", "piece",
-				{"asset": "builtin:box", "size": [4, 1, 4], "color": FLOOR_COLOR, "collision": "box"}, "Solid shapes"))
-			out.append(_entry("Wall", "A solid wall section.", "piece",
-				{"asset": "builtin:box", "size": [4, 4, 0.5], "color": WALL_COLOR, "collision": "box"}, "Solid shapes"))
-			out.append(_entry("Ramp", "A slope that rises toward its front. Seekers and enemies walk up it.", "piece",
-				{"asset": "builtin:ramp", "size": [4, 2, 4], "color": FLOOR_COLOR, "collision": "mesh"}, "Solid shapes"))
-			out.append(_entry("Pillar", "A solid cylinder.", "piece",
-				{"asset": "builtin:cylinder", "size": [1.5, 4, 1.5], "color": WALL_COLOR, "collision": "box"}, "Solid shapes"))
-			out.append(_entry("Invisible wall", "Blocks movement without being seen. Can block everyone, or only Seekers (enemies walk through).",
-				"wall", {"size": [4, 4, 0.4], "blocks": "all"}, "Solid shapes"))
-			out.append(_entry("Fireflies", "Drifting points of light. Decoration only.", "decoration",
-				{"asset": "builtin:fireflies", "size": [6, 3, 6], "amount": 24}, "Decorations"))
-			out.append(_entry("Light", "A lamp. Brightness and reach are kept within sensible limits.", "decoration",
-				{"asset": "builtin:light", "color": [1, 0.85, 0.6], "energy": 1.5, "range": 8, "pos_y": 3.0}, "Decorations"))
-			out.append(_entry("Searchlight", "A beam that sweeps left and right.", "decoration",
-				{"asset": "builtin:searchlight", "pos_y": 3.5}, "Decorations"))
+			out.append(_entry("Floor", "A flat slab to walk on (a floor). Build the ground out of these, or of your own models.", "piece",
+				{"asset": "builtin:box", "size": [4, 0.5, 4], "color": FLOOR_COLOR, "surface": "floor", "pos_y": -0.5}, "Shapes"))
+			out.append(_entry("Wall", "A wall section (an obstacle).", "piece",
+				{"asset": "builtin:box", "size": [4, 4, 0.5], "color": WALL_COLOR, "surface": "obstacle"}, "Shapes"))
+			out.append(_entry("Block", "A solid box (an obstacle). Change it to a floor in the inspector to make a step or ledge you can stand on.", "piece",
+				{"asset": "builtin:box", "size": [2, 2, 2], "color": WALL_COLOR, "surface": "obstacle"}, "Shapes"))
+			out.append(_entry("Ramp", "A slope that rises toward its front (a floor). Seekers and enemies walk up it.", "piece",
+				{"asset": "builtin:ramp", "size": [4, 2, 4], "color": FLOOR_COLOR, "surface": "floor"}, "Shapes"))
+			out.append(_entry("Pillar", "A solid cylinder (an obstacle).", "piece",
+				{"asset": "builtin:cylinder", "size": [1.5, 4, 1.5], "color": WALL_COLOR, "surface": "obstacle"}, "Shapes"))
 			for a in doc.level.map.assets:
 				var title := String(a.get("id", "")).capitalize()
-				out.append(_entry(title + " (solid)", "Imported model, placed as part of the map: Seekers and enemies collide with it.",
-					"piece", {"asset": a.id, "collision": "mesh"}, "Imported models"))
-				out.append(_entry(title + " (decoration)", "Imported model, placed as decoration: nothing collides with it unless you turn collision on.",
-					"decoration", {"asset": a.id, "collision": "none"}, "Imported models"))
+				var surface := String(a.get("surface", "obstacle"))
+				out.append(_entry(title, "Your model (%s). %s" % [SURFACE_NAMES.get(surface, surface).to_lower(), SURFACE_HELP.get(surface, "")],
+					"piece", {"asset": a.id}, "Your models"))
+			out.append(_entry("Room boundary", "An invisible plane that splits the navmesh: put one across each doorway or gap between two rooms (or a room and a corridor). Each piece of navmesh it makes is a room or corridor.",
+				"boundary", {"size": [4, 4]}, "Invisible"))
+			out.append(_entry("Invisible wall", "Blocks movement without being seen. Can block everyone, or only Seekers (enemies walk through).",
+				"wall", {"size": [4, 4, 0.4], "blocks": "all"}, "Invisible"))
+			out.append(_entry("Fireflies", "Drifting points of light.", "decoration",
+				{"asset": "builtin:fireflies", "size": [6, 3, 6], "amount": 24}, "Effects"))
+			out.append(_entry("Light", "A lamp. Brightness and reach are kept within sensible limits.", "decoration",
+				{"asset": "builtin:light", "color": [1, 0.85, 0.6], "energy": 1.5, "range": 8, "pos_y": 3.0}, "Effects"))
+			out.append(_entry("Searchlight", "A beam that sweeps left and right.", "decoration",
+				{"asset": "builtin:searchlight", "pos_y": 3.5}, "Effects"))
 		2:
-			out.append(_entry("Door", "Blocks a doorway until something opens it: a button, the end of a room's fight, or any trigger. Snaps to doorways.",
+			out.append(_entry("Door", "Blocks a doorway until something opens it: a button, the end of a room's fight, or any trigger.",
 				"object", {"type": "door", "start": "closed", "label": "LOCKED"}, "Doors and travel"))
 			out.append(_entry("Teleporter", "Takes Seekers somewhere else. Every level needs one with a destination as its exit.",
 				"object", {"type": "teleporter", "destination": "hub", "label": "Back to Nomad-2"}, "Doors and travel"))
@@ -176,15 +183,22 @@ static func type_name(kind: String, d: Dictionary) -> String:
 	match kind:
 		"start":
 			return "Start point"
-		"room":
+		"area":
 			return "Corridor" if String(d.get("kind", "room")) == "corridor" else "Room"
 		"wall":
 			return "Invisible wall"
+		"boundary":
+			return "Room boundary"
 		"piece", "decoration":
 			var asset := String(d.get("asset", ""))
 			match asset:
 				"builtin:box":
-					return "Block" if kind == "piece" else "Box"
+					var size := LevelData.vec3(d.get("size"), Vector3.ONE)
+					if size.y <= 0.75 and String(d.get("surface", "")) == "floor":
+						return "Floor"
+					if size.z <= 0.75 or size.x <= 0.75:
+						return "Wall"
+					return "Block"
 				"builtin:ramp":
 					return "Ramp"
 				"builtin:cylinder":
@@ -217,16 +231,18 @@ static func type_name(kind: String, d: Dictionary) -> String:
 static func label(kind: String, d: Dictionary, id: String) -> String:
 	if kind == "start":
 		return "Start point"
-	if kind == "room" and String(d.get("name", "")) != "":
-		return String(d.name)
+	if kind == "area" and String(d.get("name", "")) != "":
+		return "%s (%s)" % [String(d.name), id]
 	return "%s (%s)" % [type_name(kind, d), id]
 
 
 ## The id prefix for a new item.
 static func id_prefix(kind: String, d: Dictionary) -> String:
 	match kind:
-		"room":
+		"area":
 			return "hall" if String(d.get("kind", "room")) == "corridor" else "room"
+		"boundary":
+			return "boundary"
 		"object":
 			var type := String(d.get("type", "object"))
 			if type == "button" and String(d.get("mode", "")) == "floor":
@@ -240,49 +256,75 @@ static func id_prefix(kind: String, d: Dictionary) -> String:
 		"decoration":
 			return String(d.get("asset", "decor")).trim_prefix("builtin:")
 		"piece":
-			return {"builtin:box": "block", "builtin:ramp": "ramp", "builtin:cylinder": "pillar"}.get(
-				String(d.get("asset", "")), String(d.get("asset", "piece")))
+			var asset := String(d.get("asset", ""))
+			if asset == "builtin:box":
+				return type_name(kind, d).to_lower()
+			return {"builtin:ramp": "ramp", "builtin:cylinder": "pillar"}.get(asset, asset)
 	return kind
 
 
 # --- Inspector fields -------------------------------------------------------------------------
 
+static func _animation_fields(f: Array, d: Dictionary, fallback: String) -> void:
+	f.append({"k": "animation.preset", "l": "Animation", "t": "enum", "def": fallback, "rebuild": true,
+		"o": [["none", "None"], ["sway", "Sway (plants)"], ["bob", "Bob up and down"], ["spin", "Spin"], ["pulse", "Pulse"], ["sweep", "Sweep left and right"]],
+		"tip": "Only intangible things move, so the navmesh and collision stay put."})
+	if String(_path(d, "animation.preset", fallback)) != "none":
+		f.append({"k": "animation.amount", "l": "Animation amount", "t": "float", "min": 0, "max": 2, "step": 0.1, "def": 1.0})
+		f.append({"k": "animation.speed", "l": "Animation speed", "t": "float", "min": 0.1, "max": 4, "step": 0.1, "def": 1.0})
+
+
 ## The fields shown for an item: [{k: key, l: label, t: type, ...}].
 ## Types: text, multiline, float, int, bool, enum (o: [[value, label]...]),
 ## vec3, color, combat_room, dest. `tip` is the tooltip; `rebuild` redraws
 ## the inspector after a change (the field decides which others show).
-static func fields(kind: String, d: Dictionary) -> Array:
+static func fields(kind: String, d: Dictionary, level: LevelData = null) -> Array:
 	var f := []
 	match kind:
 		"start":
 			f.append({"k": "pos", "l": "Position", "t": "vec3", "step": 0.5})
 			f.append({"k": "yaw", "l": "Facing (degrees)", "t": "float", "min": -360, "max": 360, "step": 15})
-		"room":
+		"area":
 			f.append({"k": "name", "l": "Name", "t": "text", "tip": "Shown to players when a fight starts here (\"Arena: Wave 1 / 2\")."})
 			f.append({"k": "kind", "l": "Counts as", "t": "enum", "o": [["room", "Room (counts toward size)"], ["corridor", "Corridor (doesn't count)"]],
 				"tip": "Only rooms count toward the level's size. Enemies in corridors aren't part of waves."})
-			f.append({"k": "pos", "l": "Position", "t": "vec3", "step": 4, "tip": "The middle of the floor. Rooms snap to the 4 m grid."})
-			f.append({"k": "size", "l": "Size (wide, tall, deep)", "t": "vec3", "step": 4, "min": 4, "ystep": 1, "ymin": 3})
-			f.append({"k": "auto_build", "l": "Build floor and walls for me", "t": "bool", "rebuild": true,
-				"tip": "On: the editor makes this room's floor and walls, with doorways where other rooms and corridors touch it."})
-			f.append({"k": "joins", "l": "Where it touches a room", "t": "enum", "def": "doorway",
-				"o": [["doorway", "A 4 m doorway"], ["open", "Fully open (no wall)"], ["wall", "Solid wall (no way through)"]],
-				"tip": "What happens on an edge this room shares with another room or corridor. \"Fully open\" joins them into one big space (a plain split up by rocks, say). If the two rooms disagree, a solid wall wins over a doorway, and a doorway wins over fully open."})
-			if bool(d.get("auto_build", false)):
-				f.append({"k": "floor", "l": "Floor", "t": "bool", "def": true, "tip": "Turn off for a pit you'll bridge or build over yourself."})
-				f.append({"k": "walls", "l": "Walls", "t": "bool", "def": true})
-				f.append({"k": "wall_height", "l": "Wall height", "t": "float", "min": 1, "max": 12, "step": 0.5, "def": 4.0})
-				f.append({"k": "floor_color", "l": "Floor color", "t": "color", "def": FLOOR_COLOR})
-				f.append({"k": "wall_color", "l": "Wall color", "t": "color", "def": WALL_COLOR})
-		"piece", "decoration":
+			f.append({"k": "color", "l": "Navmesh color", "t": "color", "def": [0.4, 0.6, 0.95]})
+		"piece":
+			var asset := String(d.get("asset", ""))
+			var builtin := asset.begins_with("builtin:")
+			f.append({"k": "pos", "l": "Position", "t": "vec3", "step": 0.5})
+			f.append({"k": "rot", "l": "Rotation (degrees)", "t": "vec3", "step": 15})
+			if builtin:
+				f.append({"k": "size", "l": "Size (wide, tall, deep)", "t": "vec3", "step": 0.5, "min": 0.05})
+				f.append({"k": "color", "l": "Color", "t": "color", "def": WALL_COLOR})
+			else:
+				f.append({"k": "scale", "l": "Scale", "t": "vec3", "step": 0.1, "min": 0.01, "def": [1, 1, 1]})
+			var surface_options := []
+			var hitbox_options := []
+			if not builtin:
+				var model: Dictionary = level.find_asset(asset) if level else {}
+				var ms := String(model.get("surface", "obstacle"))
+				var mh := String(model.get("hitbox", "concave"))
+				surface_options.append(["", "Same as the model (%s)" % SURFACE_NAMES.get(ms, ms)])
+				hitbox_options.append(["", "Same as the model (%s)" % String(HITBOX_NAMES.get(mh, mh)).get_slice(" (", 0)])
+			for key in LevelData.SURFACES:
+				surface_options.append([key, SURFACE_NAMES[key]])
+			for key in LevelData.HITBOXES:
+				hitbox_options.append([key, HITBOX_NAMES[key]])
+			f.append({"k": "surface", "l": "Acts as", "t": "enum", "o": surface_options, "def": "" if not builtin else "obstacle",
+				"unset_empty": true, "rebuild": true, "tip": "\n".join(SURFACE_HELP.values())})
+			var effective := level.surface_of(d) if level else String(d.get("surface", "obstacle"))
+			if effective != "intangible":
+				f.append({"k": "hitbox", "l": "Hitbox", "t": "enum", "o": hitbox_options, "def": "" if not builtin else "concave",
+					"unset_empty": true, "tip": "How its collision is made from its shape. Concave follows every triangle (exact). Convex wraps it in one hull: faster, but fills in arches and hollows."})
+			else:
+				_animation_fields(f, d, "none")
+		"decoration":
 			var asset := String(d.get("asset", ""))
 			f.append({"k": "pos", "l": "Position", "t": "vec3", "step": 0.5})
-			if asset != "builtin:fireflies" and asset != "builtin:light":
-				f.append({"k": "yaw", "l": "Turn (degrees)", "t": "float", "min": -360, "max": 360, "step": 15})
+			if asset == "builtin:searchlight":
+				f.append({"k": "rot", "l": "Rotation (degrees)", "t": "vec3", "step": 15})
 			match asset:
-				"builtin:box", "builtin:ramp", "builtin:cylinder":
-					f.append({"k": "size", "l": "Size (wide, tall, deep)", "t": "vec3", "step": 0.5, "min": 0.1})
-					f.append({"k": "color", "l": "Color", "t": "color", "def": WALL_COLOR})
 				"builtin:fireflies":
 					f.append({"k": "size", "l": "Area (wide, tall, deep)", "t": "vec3", "step": 1, "min": 1})
 					f.append({"k": "amount", "l": "How many", "t": "int", "min": 1, "max": 200, "def": 24})
@@ -295,25 +337,17 @@ static func fields(kind: String, d: Dictionary) -> Array:
 					f.append({"k": "color", "l": "Color", "t": "color", "def": [1.0, 0.95, 0.8]})
 					f.append({"k": "energy", "l": "Brightness", "t": "float", "min": 0, "max": 4, "step": 0.1, "def": 2.0})
 					f.append({"k": "range", "l": "Reach (m)", "t": "float", "min": 2, "max": 30, "step": 1, "def": 18.0})
-				_:
-					f.append({"k": "scale", "l": "Scale", "t": "scale", "min": 0.05, "max": 50, "step": 0.05})
-			if not asset in ["builtin:fireflies", "builtin:light", "builtin:searchlight"]:
-				var fallback := "none" if kind == "decoration" else ("mesh" if asset == "builtin:ramp" or not asset.begins_with("builtin:") else "box")
-				f.append({"k": "collision", "l": "Collision", "t": "enum", "def": fallback,
-					"o": [["none", "None (walk through it)"], ["box", "Box (fast, rough)"], ["mesh", "Exact shape"]],
-					"tip": "Anything with collision blocks movement and shapes where enemies can walk."})
-			if kind == "decoration" and asset != "builtin:fireflies":
-				f.append({"k": "animation.preset", "l": "Animation", "t": "enum", "def": "sweep" if asset == "builtin:searchlight" else "none", "rebuild": true,
-					"o": [["none", "None"], ["sway", "Sway (plants)"], ["bob", "Bob up and down"], ["spin", "Spin"], ["pulse", "Pulse"], ["sweep", "Sweep left and right"]]})
-				if String(_path(d, "animation.preset", "none")) != "none":
-					f.append({"k": "animation.amount", "l": "Animation amount", "t": "float", "min": 0, "max": 2, "step": 0.1, "def": 1.0})
-					f.append({"k": "animation.speed", "l": "Animation speed", "t": "float", "min": 0.1, "max": 4, "step": 0.1, "def": 1.0})
+					_animation_fields(f, d, "sweep")
 		"wall":
 			f.append({"k": "pos", "l": "Position", "t": "vec3", "step": 0.5})
-			f.append({"k": "yaw", "l": "Turn (degrees)", "t": "float", "min": -360, "max": 360, "step": 15})
+			f.append({"k": "rot", "l": "Rotation (degrees)", "t": "vec3", "step": 15})
 			f.append({"k": "size", "l": "Size (wide, tall, thick)", "t": "vec3", "step": 0.5, "min": 0.1})
 			f.append({"k": "blocks", "l": "Blocks", "t": "enum", "o": [["all", "Everyone"], ["seekers", "Seekers only (enemies pass)"]],
-				"tip": "\"Seekers only\" keeps players in or out while enemies walk through."})
+				"tip": "\"Seekers only\" keeps players in or out while enemies walk through (and doesn't change the navmesh)."})
+		"boundary":
+			f.append({"k": "pos", "l": "Position", "t": "vec3", "step": 0.5, "tip": "The middle of its bottom edge."})
+			f.append({"k": "rot", "l": "Rotation (degrees)", "t": "vec3", "step": 15})
+			f.append({"k": "size", "l": "Size (wide, tall)", "t": "vec2", "step": 0.5, "min": 0.5})
 		"object":
 			f.append_array(_object_fields(d))
 		"enemy":

@@ -3,51 +3,115 @@
 A standalone Godot 4 app for building levels for *Nomad's Seekers*. Levels are plain data (JSON plus
 `.glb`/`.gltf` models), so they can be shared and, later, put on the Steam Workshop.
 
-![Interaction layer](docs/screenshots/interaction_layer.png)
+You build a level like Lego: place floors, walls and your own models wherever you like. A
+**navmesh** shows where Seekers can walk and updates as you build. **Room boundaries** split it into
+rooms, and each room gets its own color.
+
+![Rooms on the navmesh](docs/screenshots/navmesh_rooms.png)
 
 ## Starter example
 
-**Help > Open the starter example** (or the button on the welcome screen) opens your own copy of *Mossy Ruins*: a 15-room Large level with fights, a dialogue that starts a fight, doors that open when rooms are cleared, an open plains area, a poison mist with a vent button, a bridge, a lift and a boss room that wakes the exit. The original lives in `examples/starter_large/`. `tools/build_starter_level.gd` rebuilds it, deliberately out of order (enemies before rooms, rooms dumped on top of each other then dragged into place, corridors last), and its `BUILD_LOG.md` lists each step.
+**Help > Open the starter example** (or the button on the welcome screen) opens your own copy of
+*Mossy Ruins*. It's a 15-room Large level built only from basic shapes, room boundaries and the
+navmesh:
+- fights, and a dialogue that starts a fight
+- doors that open when a room is cleared
+- open plains split into three rooms by boundaries and broken up by rocks
+- a poison mist with a vent button
+- a bridge over a pit and a lift over another (each room's two sides joined into one)
+- a boss room that wakes the exit
 
-## Using it
+The original is in `examples/starter_large/`. `tools/build_starter_level.gd` rebuilds it
+deliberately out of order: enemies before floors, boundaries before anything to cut, floors dumped
+on a pile then slid into place, walls last, and one wall dropped across a doorway by mistake. Then
+it makes the level compliant. Its `BUILD_LOG.md` lists each step.
 
-1. Open the project in Godot 4.7 and run it (or export it as an app).
-2. **New level**: pick a name, a size (Arena 1 room, Small 5-9, Medium 10-14, Large 15-19, Huge 20-25; corridors don't count) and an area (forest, ...).
-3. Build in three layers. Switch any time with the buttons or the 1 / 2 / 3 keys:
-   - **1 Map**: rooms, corridors, floors, walls, ramps, invisible walls, decorations, lighting (clamped to safe ranges). Walls, floors and doorways are generated for you where rooms touch. Each room's **Where it touches a room** setting decides what a shared edge becomes: a 4 m doorway (default), **fully open** (no wall at all, for a big field split up by rocks) or a **solid wall**. When two rooms disagree, solid wall beats doorway, and doorway beats fully open.
-   - **2 Interaction**: doors, teleporters, moving platforms, bridges, buttons, floor plates, trigger zones, supply boxes, crystals, hazards, dialogues. Say what triggers what in plain sentences ("When the party enters this zone, open this door").
-   - **3 Combat**: enemies placed in waves per room, wander and chase leashes, spawn delays. Enemies may stand in corridors.
-4. **Playtest** (F5) runs the level in the game. Set the game folder in File > Settings first.
-5. **Check and export** (Ctrl+E) checks the level, then writes a folder or zip, or exports into the game's `levels/<area>/` folder.
+## Building a level
 
-Press **Help > Controls** in the app for every shortcut.
+1. **New level**: a name, an area (forest_1, ...) and lighting. There's no size to pick. It
+   follows from how many rooms you end up with: an Arena is 1 room; Small 5–9, Medium 10–14,
+   Large 15–19, Huge 20–25. Corridors don't count.
+2. **Layer 1, Map.** Place the pieces:
+   - **Shapes**: Floor, Wall, Block, Ramp, Pillar.
+   - **Your models**: import them from Level > Import a model.
+   - **Room boundary** and **Invisible wall** (both drawn as faint boxes so you can see and grab them).
+   - **Effects**: lights, fireflies, searchlights.
+3. **Every piece is a floor, an obstacle or intangible** ("Acts as" in the inspector):
+   - **Floor**: solid; the navmesh is built on top of it.
+   - **Obstacle**: solid; blocks the navmesh, and nothing walks on top of it or inside it.
+   - **Intangible**: no collision; the navmesh ignores it. Only intangible things can be animated.
+
+   Solid pieces get a **hitbox** made from their own shape: **Concave** (the default) follows
+   every triangle; **Convex** wraps it in one hull (faster, but fills in arches). You choose both
+   when you import a model, can change them later for every copy (Level > Imported models), or
+   override them on any one placed copy. Select a piece to see its hitbox as a cyan wireframe:
+   that's exactly what the game builds.
+4. **Rooms come from the navmesh.** The navmesh is sized for a Seeker (0.4 m radius) and rebakes a
+   moment after each change. Each separate piece of it is a room, in its own color: the first is
+   blue, and a newly split-off one gets a new color.
+   - **Split** a room by putting a Room boundary across the doorway or gap between the two parts.
+     It has to close the opening completely, or the navmesh goes round it (the Problems tab says so).
+   - **Pick** a room by turning on **Click picks: Rooms** (N) and clicking its navmesh. On Layer 3,
+     clicking the navmesh always picks the room.
+   - **Change** a room in the inspector: name it, make it a **corridor**, or **join** another room
+     into it (for a room split by a pit).
+5. **Layer 2, Interaction**: doors, teleporters, platforms, bridges, buttons, zones, hazards,
+   dialogues. Say what triggers what in plain sentences.
+6. **Layer 3, Combat**: enemies in waves per room, wander and chase leashes, spawn delays.
+   Enemies may stand in corridors.
+7. **Playtest** (F5) runs the level in the game. **Check and export** (Ctrl+E) checks it, then
+   writes a folder or zip, or exports straight into the game's `levels/<area>/`.
+
+![Handles](docs/screenshots/handles.png)
+
+## Moving things (like Godot)
+
+| Key | Mode |
+|---|---|
+| Q | Select only |
+| W | Move: arrows along each axis; the yellow square slides along the ground |
+| E | Rotate: rings around each axis (snaps to 15°) |
+| R | Resize: handles along the item's own sides; the white middle cube resizes evenly |
+
+You can also click and drag a piece to slide it along the ground. Moving and resizing follow the
+**Snap** setting; hold **Alt** to turn snapping off. Look around with the right mouse button, and
+hold it while pressing W A S D to fly. Help > Controls lists everything.
 
 ## Export checks
 
-Problems are listed live in the Problems tab and again when you export. **Must fix** items block export; **Check** items are warnings you can export past.
+Problems are listed live in the Problems tab and again when you export. **Must fix** items block
+export; **Check** items are warnings you can export past. Double-click one to jump to it.
 
 Must fix, for example:
-- an enemy with limited chase turned on whose chase radius is smaller than its wander radius, or a radius of zero or less
-- a closed door that nothing ever opens (give it a button, a "fight won" link, or tick "Stays locked on purpose")
-- a door waiting on a room that has no fight
-- a size mismatch (too few or too many rooms), no rooms, corridors in an Arena, a start point outside any room, a room that can't be reached
-- no exit teleporter, a teleporter that is never woken, bridges that are never extended
-- unknown enemies, enemies standing outside every room and corridor, empty waves, negative spawn delays, triggers pointing at deleted items
-- models without a license note or whose file is missing
+- the room count fits no size (2–4, or more than 25), or an Arena has a corridor
+- the start point isn't on the navmesh
+- an enemy stands off the navmesh (outside every room and corridor)
+- an enemy with limited chase whose chase radius is smaller than its wander radius
+- a closed door that nothing opens (give it a trigger, or tick "Stays locked on purpose")
+- a fight in a room that no longer exists
+- no exit teleporter, unknown enemies, empty waves, triggers pointing at deleted things
+- models without a license, or whose file is missing
 
-Check, for example: no Lumidium depot, buttons or zones that trigger nothing, hazards with no switch, dialogues never started.
-
-Double-click a problem to jump to the thing that needs fixing.
+Check, for example:
+- a room Seekers can't walk to from the start (bridges and moving platforms count as joining
+  their two ends)
+- a boundary that doesn't split anything
+- a tiny room
+- no depot
+- a button or zone that triggers nothing
 
 ## Level format
 
-See the game repo's `docs/level_format.md`. A level is a folder: `level.json`, `map.json`, `interaction.json`, `combat.json` and `assets/`.
+Format 2, described in the game repo's `docs/level_format.md`. `addons/seeker_data/level_data.gd` and
+`addons/seeker_data/level_nav.gd` are shared with the game and must stay identical in both repos.
+The navmesh, the rooms and the hitboxes come from the same code on both sides.
 
 ## Tests
 
 ```
-godot --headless --path . --script res://tests/editor_test.gd     # checks, joins, export, undo, the example
-godot --headless --path . --script res://tests/stress_test.gd     # drives the whole app through odd build orders
+godot --headless --path . --script res://tests/editor_test.gd     # rooms, boundaries, sizes, surfaces, checks, saving
+godot --headless --path . --script res://tests/stress_test.gd     # the whole app through odd build orders
+xvfb-run godot --path . --resolution 1600x900 --script res://tests/ui_test.gd   # mouse: placing, the handles
 godot --headless --path . --script res://tools/build_starter_level.gd   # rebuilds examples/starter_large
 ```
 
@@ -55,4 +119,5 @@ The stress test passes when its output has no `SCRIPT ERROR` or `ERROR:` lines.
 
 ## Exporting the editor as an app
 
-Add `catalog/*` and `examples/*` to the export preset's "Filters to export non-resource files" so the enemy list and the starter example ship with it.
+Add `catalog/*` and `examples/*` to the export preset's "Filters to export non-resource files" so
+the enemy list and the starter example ship with it.

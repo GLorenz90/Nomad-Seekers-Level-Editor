@@ -37,8 +37,8 @@ func refresh() -> void:
 	shown.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return String(a.id).naturalnocasecmp_to(String(b.id)) < 0)
 	for it in shown:
-		var group: String = Catalog.type_name(it.kind, it.data) if it.kind in ["object", "room", "enemy"] else {
-			"start": "Start", "piece": "Solid shapes", "wall": "Invisible walls", "decoration": "Decorations"}.get(it.kind, it.kind)
+		var group: String = Catalog.type_name(it.kind, it.data) if it.kind in ["object", "area", "enemy", "piece"] else {
+			"start": "Start", "wall": "Invisible walls", "boundary": "Room boundaries", "decoration": "Effects"}.get(it.kind, it.kind)
 		if not groups.has(group):
 			var head := create_item(root)
 			head.set_text(0, group)

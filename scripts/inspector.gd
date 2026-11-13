@@ -67,10 +67,11 @@ func rebuild() -> void:
 		id_edit.text_submitted.connect(apply)
 		id_edit.focus_exited.connect(func() -> void: apply.call(id_edit.text))
 		_row("Id", id_edit)
-	for f in Catalog.fields(kind, d):
+	for f in Catalog.fields(kind, d, doc.level):
 		_field(d, f, it.id)
 	match kind:
-		"room":
+		"area":
+			_area_section(it.id, d)
 			_fight_section(it.id)
 		"enemy":
 			_wave_section(it.id, d)
@@ -84,9 +85,9 @@ func rebuild() -> void:
 					_zones_section(it.id, d)
 				"platform":
 					_stops_section(it.id, d)
-	if kind in ["object", "enemy"] or (kind == "room" and not doc.level.combat_room(it.id).is_empty()):
+	if kind in ["object", "enemy"] or (kind == "area" and not doc.level.combat_room(it.id).is_empty()):
 		_trigger_section(it.id, kind, d)
-	if kind != "start":
+	if kind != "start" and kind != "area":
 		_box.add_child(HSeparator.new())
 		var buttons := HBoxContainer.new()
 		buttons.add_child(_button("Duplicate", "Make a copy next to it (Ctrl+D).", func() -> void: app.duplicate_selected()))
@@ -99,19 +100,48 @@ func _nothing_selected() -> void:
 	var doc: EditorDoc = app.doc
 	var level := doc.level
 	_title(String(level.meta.get("name", "Untitled")))
-	var lim: Array = LevelData.SIZES.get(String(level.meta.size), [0, 0])
-	_note("%s level: %d of %s rooms, %d corridor(s)." % [level.size_name(), level.room_count(),
-		"1" if lim[1] == 1 else "%d-%d" % [lim[0], lim[1]], level.corridor_count()])
+	_note(size_summary(level))
 	_note(Catalog.LAYER_HELP[app.layer])
 	_box.add_child(HSeparator.new())
 	match int(app.layer):
 		1:
-			_note("Pick something on the left, then click in the view to place it.\n\nPut rooms and corridors edge to edge: a doorway opens where they touch.\n\nClick an item to select it, drag to move it, R to turn it, Delete to remove it.")
+			_note("Pick something on the left, then click in the view to place it. Build floors to walk on and walls around them, from the shapes or your own models.\n\nThe colored navmesh shows where Seekers can walk. Each color is a room. Put a Room boundary across a doorway to split the navmesh into two rooms, then click a room's navmesh (with \"Click picks: Rooms\" on) to name it or make it a corridor.\n\nW move, E rotate, R resize, like Godot. Delete removes.")
 		2:
 			_note("Place doors, buttons and the rest, then select one to say what it does.\n\nA door needs something to open it. A button needs something to do. The Problems tab lists anything left unfinished.\n\nLines in the view show what triggers what.")
 		3:
-			_note("Pick an enemy on the left, choose a wave, then click inside a room.\n\nEnemies in a room fight in waves: when a wave is beaten the next one appears, and when no waves are left, doors set to open on combat end open.\n\nEnemies placed in corridors are there from the start.\n\nClick a room's floor to change how its fight starts.")
-	_box.add_child(_button("Level settings...", "Name, size, area and lighting.", func() -> void: app.dialogs.level_settings()))
+			_note("Pick an enemy on the left, choose a wave, then click on a room's navmesh.\n\nEnemies in a room fight in waves: when a wave is beaten the next one appears, and when no waves are left, doors set to open on combat end open.\n\nEnemies placed in corridors are there from the start.\n\nClick a room's navmesh to change how its fight starts.")
+	_box.add_child(_button("Level settings...", "Name, area and lighting.", func() -> void: app.dialogs.level_settings()))
+
+
+## "Small level: 6 rooms, 2 corridors" (the size follows the room count).
+static func size_summary(level: LevelData) -> String:
+	var rooms := level.room_count()
+	var text := "%d room%s, %d corridor%s" % [rooms, "" if rooms == 1 else "s", level.corridor_count(),
+		"" if level.corridor_count() == 1 else "s"]
+	if level.size() == "":
+		return text + ". That's no size yet: an Arena is 1 room, a Small level 5-9, Medium 10-14, Large 15-19, Huge 20-25."
+	return "%s level: %s." % [level.size_name(), text]
+
+
+## A room or corridor: what it is, and joining it with a neighbour.
+func _area_section(id: String, d: Dictionary) -> void:
+	var doc: EditorDoc = app.doc
+	_note("This is a piece of the navmesh. To split it, put a Room boundary across it. To make two pieces one room (a room split by a pit, say), join them.")
+	var others := [["", "Join another room into this one..."]]
+	for a in doc.level.map.areas:
+		if String(a.id) != id:
+			others.append([String(a.id), Catalog.label("area", a, String(a.id))])
+	if others.size() > 1:
+		_box.add_child(_options(others, "", func(other: Variant) -> void:
+			if String(other) == "":
+				return
+			doc.join_areas(id, String(other))
+			doc.commit()
+			app.toast("Joined. Its navmesh now counts as part of %s." % id)))
+	if not (d.get("also", []) as Array).is_empty():
+		_box.add_child(_button("Split off the joined pieces", "They become rooms of their own again.", func() -> void:
+			doc.split_area(id)
+			doc.commit()))
 
 
 func _fill_problems() -> void:
@@ -255,7 +285,10 @@ func _field(d: Dictionary, f: Dictionary, id: String) -> void:
 	var redraw := bool(f.get("rebuild", false))
 	var value: Variant = get_path_value(d, key, f.get("def"))
 	var save := func(v: Variant) -> void:
-		set_path_value(d, key, v)
+		if bool(f.get("unset_empty", false)) and v is String and v == "":
+			d.erase(key)
+		else:
+			set_path_value(d, key, v)
 		if key == "pos" and app.doc.kind_of(id) == "enemy":
 			app.doc.settle_enemy(id)
 		_commit(id + ":" + key, redraw)
@@ -287,6 +320,18 @@ func _field(d: Dictionary, f: Dictionary, id: String) -> void:
 			label.mouse_filter = Control.MOUSE_FILTER_STOP
 			_box.add_child(label)
 			_box.add_child(_vec3(LevelData.vec3(value), f, func(v: Vector3) -> void: save.call(LevelData.arr3(v))))
+		"vec2":
+			var dims: Array = value if value is Array else [4, 4]
+			var row := HBoxContainer.new()
+			var spins: Array[SpinBox] = []
+			for axis in 2:
+				var spin := _spin(float(dims[axis]) if dims.size() > axis else 4.0, float(f.get("min", 0.1)), 10000.0, 0.01,
+					func(_v: float) -> void: save.call([spins[0].value, spins[1].value]))
+				spin.custom_arrow_step = float(f.get("step", 0.5))
+				spin.tooltip_text = ["Wide", "Tall"][axis]
+				spins.append(spin)
+				row.add_child(spin)
+			_row(f.l, row, tip)
 		"scale":
 			var s := LevelData.vec3(value, Vector3.ONE).x
 			_row(f.l, _spin(s, float(f.min), float(f.max), 0.01, func(v: float) -> void: save.call([v, v, v])), tip)
@@ -451,14 +496,19 @@ func _zones_section(id: String, d: Dictionary) -> void:
 		_field(z, {"k": "pos", "l": "Middle of its floor", "t": "vec3", "step": 1}, id)
 		_field(z, {"k": "size", "l": "Size (wide, tall, deep)", "t": "vec3", "step": 1, "min": 1}, id)
 	var rooms := [["", "Cover a room or corridor..."]]
-	for r in doc.level.map.rooms:
+	for r in doc.level.map.areas:
 		rooms.append([String(r.id), doc.label_of(String(r.id))])
 	_row("Add an area", _options(rooms, "", func(v: Variant) -> void:
-		var room := doc.level.find_room(String(v))
+		var room := doc.level.find_area(String(v))
 		if not room.is_empty():
 			if not d.has("zones"):
 				d.zones = []
-			d.zones.append({"pos": (room.pos as Array).duplicate(), "size": (room.size as Array).duplicate()})
+			# A box around the room's navmesh.
+			var box := Items.local_aabb("area", room, doc.level)
+			box.position += Items.get_pos("area", room)
+			var bottom := Vector3(box.get_center().x, box.position.y - 0.5, box.get_center().z)
+			d.zones.append({"pos": LevelData.arr3(bottom.snapped(Vector3(0.5, 0.5, 0.5))),
+				"size": [snappedf(box.size.x, 0.5), 4.0, snappedf(box.size.z, 0.5)]})
 			_commit(id + ":zones", true)), "One hazard can cover several rooms, or a room and its corridor.")
 
 

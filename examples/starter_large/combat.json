@@ -2,140 +2,6 @@
 	"free": [],
 	"rooms": [
 		{
-			"room": "ruin_hall",
-			"start": "event",
-			"waves": [
-				{
-					"enemies": [
-						{
-							"enemy": "mutated_crawler",
-							"id": "crawler_2",
-							"pos": [
-								46.0,
-								0.0,
-								-3.0
-							]
-						},
-						{
-							"enemy": "mutated_crawler",
-							"id": "crawler_3",
-							"pos": [
-								50.0,
-								0.0,
-								3.0
-							]
-						}
-					]
-				}
-			]
-		},
-		{
-			"room": "watch_post",
-			"start": "enter",
-			"waves": [
-				{
-					"enemies": [
-						{
-							"enemy": "grub_hound",
-							"id": "hound_6",
-							"pos": [
-								104.0,
-								0.0,
-								30.0
-							]
-						},
-						{
-							"enemy": "lumen_sprite",
-							"id": "sprite_3",
-							"pos": [
-								100.0,
-								0.0,
-								34.0
-							]
-						}
-					]
-				}
-			]
-		},
-		{
-			"room": "drone_hall",
-			"start": "enter",
-			"waves": [
-				{
-					"enemies": [
-						{
-							"enemy": "sentry_drone",
-							"id": "drone_2",
-							"pos": [
-								176.0,
-								0.0,
-								-4.0
-							]
-						},
-						{
-							"enemy": "sentry_drone",
-							"id": "drone_3",
-							"pos": [
-								176.0,
-								0.0,
-								4.0
-							]
-						}
-					]
-				}
-			]
-		},
-		{
-			"room": "boss_arena",
-			"start": "enter",
-			"waves": [
-				{
-					"enemies": [
-						{
-							"enemy": "mutated_crawler",
-							"id": "crawler_4",
-							"pos": [
-								208.0,
-								0.0,
-								-4.0
-							]
-						},
-						{
-							"enemy": "mutated_crawler",
-							"id": "crawler_5",
-							"pos": [
-								216.0,
-								0.0,
-								4.0
-							]
-						}
-					]
-				},
-				{
-					"enemies": [
-						{
-							"enemy": "umbral_eye",
-							"id": "eye_4",
-							"pos": [
-								212.0,
-								0.0,
-								0.0
-							]
-						},
-						{
-							"enemy": "caustic_ooze",
-							"id": "ooze_2",
-							"pos": [
-								206.0,
-								0.0,
-								6.0
-							]
-						}
-					]
-				}
-			]
-		},
-		{
 			"room": "hound_den",
 			"start": "enter",
 			"waves": [
@@ -182,18 +48,18 @@
 							"enemy": "mutated_crawler",
 							"id": "crawler_1",
 							"pos": [
-								44.0,
-								0.0,
-								20.0
+								44,
+								0,
+								20
 							]
 						},
 						{
 							"enemy": "grub_hound",
 							"id": "hound_4",
 							"pos": [
-								52.0,
-								0.0,
-								28.0
+								52,
+								0,
+								28
 							]
 						}
 					]
@@ -210,9 +76,9 @@
 							"enemy": "caustic_ooze",
 							"id": "ooze_1",
 							"pos": [
-								48.0,
-								0.0,
-								52.0
+								48,
+								0,
+								52
 							],
 							"wander": true,
 							"wander_radius": 5.0
@@ -233,9 +99,9 @@
 							"id": "hound_5",
 							"limited_chase": true,
 							"pos": [
-								84.0,
-								0.0,
-								44.0
+								86,
+								0,
+								44
 							],
 							"wander": true,
 							"wander_radius": 8.0
@@ -251,17 +117,151 @@
 				{
 					"enemies": [
 						{
-							"chase_radius": 14.0,
+							"chase_radius": 12.0,
 							"enemy": "sentry_drone",
 							"id": "drone_1",
 							"limited_chase": true,
 							"pos": [
-								104.0,
-								0.0,
-								0.0
+								109,
+								0,
+								0
 							],
 							"wander": true,
-							"wander_radius": 4.0
+							"wander_radius": 3.0
+						}
+					]
+				}
+			]
+		},
+		{
+			"room": "ruin_hall",
+			"start": "event",
+			"waves": [
+				{
+					"enemies": [
+						{
+							"enemy": "mutated_crawler",
+							"id": "crawler_2",
+							"pos": [
+								46,
+								0,
+								-3
+							]
+						},
+						{
+							"enemy": "mutated_crawler",
+							"id": "crawler_3",
+							"pos": [
+								50,
+								0,
+								3
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"room": "watch_post",
+			"start": "enter",
+			"waves": [
+				{
+					"enemies": [
+						{
+							"enemy": "grub_hound",
+							"id": "hound_6",
+							"pos": [
+								104,
+								0,
+								30
+							]
+						},
+						{
+							"enemy": "lumen_sprite",
+							"id": "sprite_1",
+							"pos": [
+								100,
+								0,
+								34
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"room": "drone_hall",
+			"start": "enter",
+			"waves": [
+				{
+					"enemies": [
+						{
+							"enemy": "sentry_drone",
+							"id": "drone_2",
+							"pos": [
+								176,
+								0,
+								-4
+							]
+						},
+						{
+							"enemy": "sentry_drone",
+							"id": "drone_3",
+							"pos": [
+								176,
+								0,
+								4
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"room": "boss_arena",
+			"start": "enter",
+			"waves": [
+				{
+					"enemies": [
+						{
+							"enemy": "mutated_crawler",
+							"id": "crawler_4",
+							"pos": [
+								208,
+								0,
+								-4
+							]
+						},
+						{
+							"enemy": "mutated_crawler",
+							"id": "crawler_5",
+							"pos": [
+								216,
+								0,
+								4
+							]
+						}
+					]
+				},
+				{
+					"enemies": [
+						{
+							"enemy": "umbral_eye",
+							"id": "eye_1",
+							"pos": [
+								212,
+								0,
+								0
+							]
+						},
+						{
+							"enemy": "caustic_ooze",
+							"id": "ooze_2",
+							"pos": [
+								206,
+								0,
+								6
+							]
 						}
 					]
 				}

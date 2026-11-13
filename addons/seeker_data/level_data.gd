@@ -1,6 +1,6 @@
 class_name LevelData
 extends RefCounted
-## The Nomad's Seekers level format (version 1), shared by the game and the
+## The Nomad's Seekers level format (version 2), shared by the game and the
 ## level editor. Full description: docs/level_format.md.
 ##
 ## A level is a folder of JSON files plus plain assets. It never holds code:
@@ -9,16 +9,23 @@ extends RefCounted
 ## levels out of its own whitelisted pieces (Grayson, 2026-11-12).
 ##
 ##   my_level/
-##     level.json        meta: name, size, author, description, area
-##     map.json          Layer 1: rooms, pieces, walls, decorations, lighting
+##     level.json        meta: name, author, description, area (size comes from the room count)
+##     map.json          Layer 1: pieces, invisible walls, room boundaries, areas,
+##                       decorations, lighting
 ##     interaction.json  Layer 2: doors, buttons, hazards, platforms... + rules
 ##     combat.json       Layer 3: waves per room, corridor enemies
 ##     assets/           glb / gltf models, png, ogg
 ##
 ## This script only reads, writes and checks the data; it doesn't know the
 ## game's classes, so the editor can use it as-is (addons/seeker_data/).
+##
+## Version 2 (Grayson, 2026-11-13): levels are built from placed pieces only
+## (no generated rooms). Every model is a floor (walkable), an obstacle
+## (blocks the navmesh) or intangible (no collision). Rooms and corridors are
+## areas of the navmesh, split by room boundaries; the editor saves each
+## area's navmesh polygons so the game knows where rooms are.
 
-const FORMAT := 1
+const FORMAT := 2
 const FILES := {
 	"meta": "level.json",
 	"map": "map.json",
@@ -27,7 +34,8 @@ const FILES := {
 }
 
 ## Level sizes (Grayson, 2026-11-12): rooms only; corridors never count.
-## An Arena is one room and nothing else.
+## An Arena is one room and nothing else. Since format 2 the size isn't
+## chosen: it follows from the room count (size_for).
 const SIZES := {
 	"arena": [1, 1],
 	"small": [5, 9],
@@ -38,18 +46,31 @@ const SIZES := {
 const SIZE_NAMES := {"arena": "Arena", "small": "Small", "medium": "Medium",
 	"large": "Large", "huge": "Huge"}
 
-## Rooms and corridors snap to this grid (Grayson, 2026-11-12).
+## The editor's default snap.
 const GRID := 4.0
 
-const ROOM_KINDS := ["room", "corridor"]
-const COLLISION := ["none", "box", "mesh"]
+## What a piece is to Seekers and enemies (Grayson, 2026-11-13).
+##   floor       solid, and the navmesh is built on top of it
+##   obstacle    solid, and blocks the navmesh (nothing walks on top)
+##   intangible  no collision; ignored by the navmesh
+const SURFACES := ["floor", "obstacle", "intangible"]
+## How a solid piece's collision is made from its mesh: concave follows
+## every triangle (exact, static only); convex wraps it in one hull.
+const HITBOXES := ["concave", "convex"]
+const AREA_KINDS := ["room", "corridor"]
+## The navmesh is sized for a Seeker (the player capsule: radius 0.4, 1.8 tall).
+## The 0.2 m cell fits that radius and height exactly; steps up to 0.4 m count
+## as walkable. The game sets its navigation map to the same cell size.
+const NAV := {"radius": 0.4, "height": 1.8, "climb": 0.4, "slope": 45.0,
+	"cell": 0.2, "cell_height": 0.2}
 const WALL_BLOCKS := ["all", "seekers"]
 ## Decoration animation presets (no scripts in levels).
 const ANIMATIONS := ["none", "sway", "bob", "spin", "pulse", "sweep"]
-## Built-in pieces, so a level can be blocked out without importing anything.
+## Built-in shapes, so a level can be blocked out without importing anything.
+## They're sized with "size"; imported models with "scale".
 const BUILTIN_PIECES := ["builtin:box", "builtin:cylinder", "builtin:ramp"]
-const BUILTIN_DECOR := ["builtin:fireflies", "builtin:light", "builtin:searchlight",
-	"builtin:box", "builtin:cylinder"]
+## Built-in effects (lights and particles), kept in map.decorations.
+const BUILTIN_DECOR := ["builtin:fireflies", "builtin:light", "builtin:searchlight"]
 
 ## Lighting presets and how far each slider may go, so no level is too dark
 ## to see or annoyingly bright (Grayson). Dark rooms use the Darkness hazard.
@@ -96,9 +117,9 @@ var combat := {}
 # --- Making, loading, saving -------------------------------------------------------------
 
 ## A new, empty level.
-static func create(level_name: String, size: String, area := "") -> LevelData:
+static func create(level_name: String, area := "") -> LevelData:
 	var level := LevelData.new()
-	level.meta = {"format": FORMAT, "name": level_name, "size": size, "area": area,
+	level.meta = {"format": FORMAT, "name": level_name, "area": area,
 		"author": "", "description": ""}
 	level._fill_defaults()
 	return level
@@ -147,10 +168,12 @@ static func _read_json(path: String) -> Dictionary:
 
 
 func _fill_defaults() -> void:
-	meta.merge({"format": FORMAT, "name": "Untitled", "size": "small", "area": "",
+	meta.merge({"format": FORMAT, "name": "Untitled", "area": "",
 		"author": "", "description": ""})
+	meta.erase("size")
 	map.merge({"grid": GRID, "lighting": {}, "start": {"pos": [0, 0, 0], "yaw": 0},
-		"assets": [], "rooms": [], "pieces": [], "walls": [], "decorations": []})
+		"assets": [], "pieces": [], "walls": [], "boundaries": [], "areas": [],
+		"decorations": []})
 	map.lighting = clamp_lighting(map.lighting)
 	interaction.merge({"objects": [], "button_groups": [], "dialogues": [], "flags": {},
 		"rules": []})
@@ -159,27 +182,105 @@ func _fill_defaults() -> void:
 
 # --- Reading helpers -----------------------------------------------------------------------
 
+## The size a room count makes ("" when it fits none: 2-4 or over 25).
+static func size_for(rooms: int) -> String:
+	for key in SIZES:
+		if rooms >= SIZES[key][0] and rooms <= SIZES[key][1]:
+			return key
+	return ""
+
+
+## This level's size from its rooms ("" when the count fits no size).
+func size() -> String:
+	return size_for(room_count())
+
+
 func size_name() -> String:
-	return SIZE_NAMES.get(String(meta.size), String(meta.size))
+	var key := size()
+	return SIZE_NAMES.get(key, "No size")
 
 
-## Spaces marked as rooms (corridors don't count toward the size).
+## Areas marked as rooms (corridors don't count toward the size).
 func room_count() -> int:
 	var n := 0
-	for r in map.rooms:
-		if String(r.get("kind", "room")) == "room":
+	for a in map.areas:
+		if String(a.get("kind", "room")) == "room":
 			n += 1
 	return n
 
 
 func corridor_count() -> int:
-	return map.rooms.size() - room_count()
+	return map.areas.size() - room_count()
 
 
-func find_room(id: String) -> Dictionary:
-	for r in map.rooms:
-		if String(r.get("id", "")) == id:
-			return r
+func find_area(id: String) -> Dictionary:
+	for a in map.areas:
+		if String(a.get("id", "")) == id:
+			return a
+	return {}
+
+
+## The area (room or corridor) a point stands in, "" for none. Uses the
+## navmesh polygons the editor saved: inside one (seen from above) and no
+## more than 1 m below or 3 m above it.
+func area_at(point: Vector3) -> String:
+	for a in map.areas:
+		if area_contains(a, point):
+			return String(a.get("id", ""))
+	return ""
+
+
+static func area_contains(area: Dictionary, point: Vector3) -> bool:
+	for poly in area.get("polys", []):
+		if poly_contains(poly, point):
+			return true
+	return false
+
+
+## A navmesh polygon ([[x, y, z], ...], convex) holds a point seen from above,
+## with the point between 1 m below and 3 m above the polygon.
+static func poly_contains(poly: Array, point: Vector3) -> bool:
+	var n := poly.size()
+	if n < 3:
+		return false
+	var lo := INF
+	var hi := -INF
+	var sign := 0.0
+	for i in n:
+		var a := vec3(poly[i])
+		var b := vec3(poly[(i + 1) % n])
+		lo = minf(lo, a.y)
+		hi = maxf(hi, a.y)
+		var cross := (b.x - a.x) * (point.z - a.z) - (b.z - a.z) * (point.x - a.x)
+		if absf(cross) < 0.0001:
+			continue
+		if sign == 0.0:
+			sign = signf(cross)
+		elif signf(cross) != sign:
+			return false
+	return point.y >= lo - 1.0 and point.y <= hi + 3.0
+
+
+## A piece's surface: its own override, else its model's, else obstacle.
+func surface_of(piece: Dictionary) -> String:
+	var s := String(piece.get("surface", ""))
+	if s == "":
+		s = String(find_asset(String(piece.get("asset", ""))).get("surface", ""))
+	return s if SURFACES.has(s) else "obstacle"
+
+
+## A piece's hitbox: its own override, else its model's, else concave.
+func hitbox_of(piece: Dictionary) -> String:
+	var h := String(piece.get("hitbox", ""))
+	if h == "":
+		h = String(find_asset(String(piece.get("asset", ""))).get("hitbox", ""))
+	return h if HITBOXES.has(h) else "concave"
+
+
+func find_asset(id: String) -> Dictionary:
+	for a in map.assets:
+		if String(a.get("id", "")) == id:
+			return a
 	return {}
 
 
@@ -200,11 +301,11 @@ func combat_room(id: String) -> Dictionary:
 ## Every id in the level and what it is ("room", "door", "enemy"...).
 func ids() -> Dictionary:
 	var out := {}
-	for r in map.rooms:
-		out[String(r.get("id", ""))] = String(r.get("kind", "room"))
-	for key in ["pieces", "walls", "decorations"]:
+	for a in map.areas:
+		out[String(a.get("id", ""))] = String(a.get("kind", "room"))
+	for key in ["pieces", "walls", "boundaries", "decorations"]:
 		for p in map[key]:
-			out[String(p.get("id", ""))] = key.trim_suffix("s")
+			out[String(p.get("id", ""))] = "boundary" if key == "boundaries" else key.trim_suffix("s")
 	for o in interaction.objects:
 		out[String(o.get("id", ""))] = String(o.get("type", ""))
 	for g in interaction.button_groups:
@@ -227,6 +328,8 @@ func placements() -> Array:
 
 
 static func vec3(v, fallback := Vector3.ZERO) -> Vector3:
+	if v is Vector3:
+		return v
 	if v is Array and v.size() >= 3:
 		return Vector3(float(v[0]), float(v[1]), float(v[2]))
 	return fallback
@@ -280,26 +383,23 @@ func validate(known_enemies: PackedStringArray = PackedStringArray()) -> PackedS
 	if int(meta.get("format", FORMAT)) > FORMAT:
 		out.append("Made with a newer version of the format (%d); this game reads %d." % [
 			int(meta.format), FORMAT])
-	var size := String(meta.size)
-	if not SIZES.has(size):
-		out.append("Unknown size \"%s\"." % size)
-	else:
-		var lim: Array = SIZES[size]
-		var rooms := room_count()
-		if rooms < lim[0] or rooms > lim[1]:
-			out.append("%s levels have %s rooms; this one has %d." % [size_name(),
-				str(lim[0]) if lim[0] == lim[1] else "%d-%d" % lim, rooms])
-		if size == "arena" and corridor_count() > 0:
-			out.append("An Arena is one room with no corridors.")
+	if int(meta.get("format", FORMAT)) < FORMAT:
+		out.append("Made with an older editor (format %d). Levels from before format 2 have to be rebuilt." % int(meta.format))
+	var rooms := room_count()
+	if size() == "":
+		out.append("%d rooms fits no size: an Arena is 1 room, the others take 5-25." % rooms)
+	elif size() == "arena" and corridor_count() > 0:
+		out.append("An Arena is one room with no corridors.")
+	for a in map.areas:
+		if (a.get("polys", []) as Array).is_empty():
+			out.append("%s has no navmesh saved with it. Open and save the level in the editor." % a.get("id", "?"))
 	if not map.has("start") or not (map.start.get("pos") is Array):
 		out.append("No start point.")
 
 	# Ids: present and unique across every layer.
 	var seen := {}
 	var all_ids := []
-	for r in map.rooms:
-		all_ids.append(r)
-	for key in ["pieces", "walls", "decorations"]:
+	for key in ["areas", "pieces", "walls", "boundaries", "decorations"]:
 		all_ids.append_array(map[key])
 	all_ids.append_array(interaction.objects)
 	all_ids.append_array(interaction.button_groups)
@@ -315,21 +415,35 @@ func validate(known_enemies: PackedStringArray = PackedStringArray()) -> PackedS
 	var known := ids()
 
 	# Layer 1.
-	for r in map.rooms:
-		if not ROOM_KINDS.has(String(r.get("kind", "room"))):
-			out.append("Room %s: unknown kind." % r.get("id", "?"))
+	for a in map.areas:
+		if not AREA_KINDS.has(String(a.get("kind", "room"))):
+			out.append("Area %s: kind must be room or corridor." % a.get("id", "?"))
 	var asset_ids := {}
 	for a in map.assets:
 		asset_ids[String(a.get("id", ""))] = true
 		if String(a.get("license", "")) == "":
 			out.append("Asset %s has no license." % a.get("id", "?"))
-	for key in ["pieces", "decorations"]:
-		for p in map[key]:
-			var asset := String(p.get("asset", ""))
-			if not asset.begins_with("builtin:") and not asset_ids.has(asset):
-				out.append("%s uses an asset that isn't imported (%s)." % [p.get("id", "?"), asset])
-			if p.has("animation") and not ANIMATIONS.has(String(p.animation.get("preset", "none"))):
+		if a.has("surface") and not SURFACES.has(String(a.surface)):
+			out.append("Asset %s: unknown surface." % a.get("id", "?"))
+	for p in map.pieces:
+		var asset := String(p.get("asset", ""))
+		if asset.begins_with("builtin:"):
+			if not BUILTIN_PIECES.has(asset):
+				out.append("%s: unknown built-in shape %s." % [p.get("id", "?"), asset])
+		elif not asset_ids.has(asset):
+			out.append("%s uses an asset that isn't imported (%s)." % [p.get("id", "?"), asset])
+		if p.has("surface") and not SURFACES.has(String(p.surface)):
+			out.append("%s: unknown surface." % p.get("id", "?"))
+		if p.has("hitbox") and not HITBOXES.has(String(p.hitbox)):
+			out.append("%s: unknown hitbox." % p.get("id", "?"))
+		if p.has("animation"):
+			if not ANIMATIONS.has(String(p.animation.get("preset", "none"))):
 				out.append("%s: unknown animation." % p.get("id", "?"))
+			elif surface_of(p) != "intangible" and String(p.animation.get("preset", "none")) != "none":
+				out.append("%s is animated but solid. Only intangible pieces can move." % p.get("id", "?"))
+	for d in map.decorations:
+		if not BUILTIN_DECOR.has(String(d.get("asset", ""))):
+			out.append("Decoration %s: unknown effect." % d.get("id", "?"))
 	for w in map.walls:
 		if not WALL_BLOCKS.has(String(w.get("blocks", "all"))):
 			out.append("Wall %s: blocks must be all or seekers." % w.get("id", "?"))
@@ -388,8 +502,8 @@ func validate(known_enemies: PackedStringArray = PackedStringArray()) -> PackedS
 	# Layer 3.
 	for room in combat.rooms:
 		var rid := String(room.get("room", ""))
-		if find_room(rid).is_empty():
-			out.append("Combat is set for %s, which isn't a room." % rid)
+		if find_area(rid).is_empty():
+			out.append("Combat is set for %s, which isn't a room or corridor." % rid)
 		if (room.get("waves", []) as Array).is_empty():
 			out.append("%s has combat but no waves." % rid)
 		for i in (room.get("waves", []) as Array).size():

@@ -21,22 +21,23 @@ static func build(kind: String, d: Dictionary, doc: EditorDoc, named := false, l
 			root.add_child(_at(_box(Vector3(0.25, 0.25, 0.9), Color(0.25, 0.9, 0.45)), Vector3(0, 1.2, -0.6)))
 			tag = "START"
 			tag_y = 2.3
-		"room":
-			var s := LevelData.vec3(d.get("size"), Vector3(16, 6, 16))
-			var corridor := String(d.get("kind", "room")) == "corridor"
-			var color := Color(0.55, 0.7, 0.85) if corridor else Color(0.3, 0.85, 1.0)
-			root.add_child(_outline(s, color))
-			if layer == 1 and not bool(d.get("auto_build", false)):
-				root.add_child(_at(_box(Vector3(s.x, 0.04, s.z), color, 0.12), Vector3(0, 0.02, 0)))
-			tag = Catalog.label(kind, d, id)
-			tag_y = minf(s.y, 4.0) + 0.6
-			named = named or layer == 3
 		"wall":
+			# Invisible things get a faint box so they're easy to see and grab.
 			var s := LevelData.vec3(d.get("size"), Vector3(4, 4, 0.4))
 			var seekers := String(d.get("blocks", "all")) == "seekers"
-			root.add_child(_at(_box(s, Color(1.0, 0.6, 0.2) if seekers else Color(1.0, 0.3, 0.3), 0.3), Vector3(0, s.y * 0.5, 0)))
+			var c := Color(1.0, 0.6, 0.2) if seekers else Color(1.0, 0.35, 0.35)
+			root.add_child(_at(_box(s, c, 0.14), Vector3(0, s.y * 0.5, 0)))
+			root.add_child(lines(box_edges(AABB(Vector3(-s.x * 0.5, 0, -s.z * 0.5), s)), Color(c, 0.55)))
 			tag = "Seekers only" if seekers else "Invisible wall"
 			tag_y = s.y + 0.4
+		"boundary":
+			var dims: Array = d.get("size", [4, 4])
+			var w := float(dims[0])
+			var h := float(dims[1]) if dims.size() > 1 else 4.0
+			var c := Color(0.85, 0.5, 1.0)
+			root.add_child(_at(_box(Vector3(w, h, 0.04), c, 0.12), Vector3(0, h * 0.5, 0)))
+			root.add_child(lines(box_edges(AABB(Vector3(-w * 0.5, 0, -0.05), Vector3(w, h, 0.1))), Color(c, 0.6)))
+			tag_y = h + 0.4  # no name tag: the faint plane says enough
 		"piece", "decoration":
 			_build_model(root, kind, d, doc)
 			if kind == "decoration":
@@ -80,21 +81,15 @@ static func _build_model(root: Node3D, kind: String, d: Dictionary, doc: EditorD
 	var size := LevelData.vec3(d.get("size"), Vector3(4, 1, 4))
 	var color := _color(d.get("color"), Color(0.55, 0.57, 0.6))
 	match asset:
-		"builtin:box":
-			root.add_child(_at(_box(size, color), Vector3(0, size.y * 0.5, 0)))
-		"builtin:cylinder":
-			var mesh := CylinderMesh.new()
-			mesh.top_radius = size.x * 0.5
-			mesh.bottom_radius = size.x * 0.5
-			mesh.height = size.y
-			root.add_child(_at(_mesh(mesh, color), Vector3(0, size.y * 0.5, 0)))
-		"builtin:ramp":
-			var mesh := PrismMesh.new()
-			mesh.left_to_right = 0.0
-			mesh.size = Vector3(size.z, size.y, size.x)
-			var mi := _mesh(mesh, color)
-			mi.rotation_degrees.y = 90.0
-			root.add_child(_at(mi, Vector3(0, size.y * 0.5, 0)))
+		"builtin:box", "builtin:cylinder", "builtin:ramp":
+			# The same shapes the game and the navmesh use.
+			var mat := material(color)
+			for m in LevelNav.builtin_meshes(asset, size):
+				var mi := MeshInstance3D.new()
+				mi.mesh = m[0]
+				mi.material_override = mat
+				mi.transform = m[1]
+				root.add_child(mi)
 		"builtin:fireflies":
 			var glow := _color(d.get("color"), Color(1.0, 0.95, 0.5))
 			root.add_child(_at(_box(size, glow, 0.06), Vector3(0, size.y * 0.5, 0)))
@@ -232,6 +227,17 @@ static func material(color: Color, alpha := 1.0, glow := false) -> StandardMater
 		mat.emission_enabled = true
 		mat.emission = color
 		mat.emission_energy_multiplier = 0.8
+	return mat
+
+
+## Unshaded, see-through, colored per vertex (the navmesh overlay).
+static func nav_material() -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 	return mat
 
 

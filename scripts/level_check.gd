@@ -14,6 +14,7 @@ extends RefCounted
 static func run(doc: EditorDoc) -> Array:
 	var out := []
 	var level := doc.level
+	doc.update_nav()
 	_check_level(doc, out)
 	_check_map(doc, out)
 	_check_interaction(doc, out)
@@ -48,23 +49,20 @@ static func _add(out: Array, severity: String, text: String, id: String, layer: 
 
 static func _check_level(doc: EditorDoc, out: Array) -> void:
 	var level := doc.level
-	var size := String(level.meta.get("size", ""))
-	if not LevelData.SIZES.has(size):
-		_add(out, "error", "The level has no size. Pick one in Level settings.", "", 1)
-	else:
-		var lim: Array = LevelData.SIZES[size]
-		var rooms := level.room_count()
-		var want := "1 room" if lim[1] == 1 else "%d to %d rooms" % [lim[0], lim[1]]
-		if rooms < lim[0]:
-			_add(out, "error", "%s levels have %s. This one has %d: add %d more, or pick a smaller size in Level settings." % [
-				level.size_name(), want, rooms, lim[0] - rooms], "", 1)
-		elif rooms > lim[1]:
-			_add(out, "error", "%s levels have %s. This one has %d: remove %d (or turn some into corridors), or pick a bigger size in Level settings." % [
-				level.size_name(), want, rooms, rooms - lim[1]], "", 1)
-		if size == "arena":
-			for r in level.map.rooms:
-				if String(r.get("kind", "room")) == "corridor":
-					_add(out, "error", "An Arena is one room and nothing else. Remove this corridor.", String(r.id), 1)
+	var rooms := level.room_count()
+	if level.size() == "":
+		if rooms == 0:
+			_add(out, "error", "There are no rooms yet. Build a floor: the navmesh on it becomes your first room.", "", 1)
+		elif rooms < 5:
+			_add(out, "error", "%d rooms fits no level size: an Arena is 1 room, a Small level needs 5. Add %d more (split a big room with a Room boundary), or join them into one." % [
+				rooms, 5 - rooms], "", 1)
+		else:
+			_add(out, "error", "%d rooms is more than a Huge level's 25. Turn %d into corridors, join some together, or split the level in two." % [
+				rooms, rooms - 25], "", 1)
+	elif level.size() == "arena":
+		for a in level.map.areas:
+			if String(a.get("kind", "room")) == "corridor":
+				_add(out, "error", "An Arena is one room and nothing else. Make this corridor part of the room (remove the boundary between them) or turn it into a room.", String(a.id), 1)
 	var level_name := String(level.meta.get("name", "")).strip_edges()
 	if level_name == "" or level_name == "Untitled":
 		_add(out, "warning", "The level has no name. Give it one in Level settings.", "", 1)
@@ -72,37 +70,96 @@ static func _check_level(doc: EditorDoc, out: Array) -> void:
 
 # --- Layer 1 ----------------------------------------------------------------------------------
 
+## A bridge's or platform's two ends ([] for anything else).
+static func _carrier_ends(o: Dictionary) -> Array:
+	match String(o.get("type", "")):
+		"bridge":
+			var p := LevelData.vec3(o.get("pos"))
+			var dir := Basis(Vector3.UP, deg_to_rad(float(o.get("yaw", 0.0)))) * Vector3.FORWARD
+			return [p - dir * 1.0, p + dir * (float(o.get("length", 8.0)) + 1.0)]
+		"platform":
+			var pts: Array = o.get("points", [])
+			if pts.size() >= 2:
+				return [LevelData.vec3(pts[0]), LevelData.vec3(pts[pts.size() - 1])]
+	return []
+
+
+## The piece of navmesh nearest a point, within 3.5 m (-1 if none).
+static func _island_near(walk: Array, p: Vector3) -> int:
+	var best := 3.5
+	var pick := -1
+	for i in walk.size():
+		var d := LevelNav._island_distance(walk[i], p)
+		if d < best:
+			best = d
+			pick = i
+	return pick
+
+
+static func _area_size(a: Dictionary) -> float:
+	var total := 0.0
+	for poly in a.get("polys", []):
+		var pts := PackedVector3Array()
+		for v in poly:
+			pts.append(LevelData.vec3(v))
+		total += LevelNav._poly_area(pts)
+	return total
+
+
 static func _check_map(doc: EditorDoc, out: Array) -> void:
 	var level := doc.level
-	var rooms: Array = level.map.rooms
-	if rooms.is_empty():
-		_add(out, "error", "There are no rooms yet. Place a Room from the Map layer's palette.", "", 1)
+	var areas: Array = level.map.areas
 	var start := LevelData.vec3(level.map.start.get("pos"))
 	var start_room := doc.room_at(start)
-	if not rooms.is_empty() and start_room == "":
-		_add(out, "warning", "The start point isn't inside a room or corridor. Seekers may start in mid-air.", EditorDoc.START, 1)
-	for i in rooms.size():
-		for j in range(i + 1, rooms.size()):
-			if RoomBuilder.overlapping(rooms[i], rooms[j]):
-				_add(out, "warning", "%s overlaps %s. Rooms should sit side by side." % [
-					doc.label_of(String(rooms[i].id)), doc.label_of(String(rooms[j].id))], String(rooms[j].id), 1)
-	# Can every room be reached? Rooms and corridors that touch are joined.
-	if start_room != "":
-		var reached := {start_room: true}
-		var grew := true
-		while grew:
-			grew = false
-			for a in rooms:
-				if not reached.has(String(a.id)):
-					continue
-				for b in rooms:
-					if not reached.has(String(b.id)) and RoomBuilder.joined(a, b):
-						reached[String(b.id)] = true
-						grew = true
-		for r in rooms:
-			if not reached.has(String(r.id)):
-				_add(out, "warning", "%s doesn't touch anything that leads back to the start. Join it with a corridor, or check Seekers can get there another way." % doc.label_of(String(r.id)),
-					String(r.id), 1)
+	if not areas.is_empty() and start_room == "":
+		_add(out, "error", "The start point isn't on the navmesh, so Seekers would start in mid-air or inside something. Move it onto a floor.", EditorDoc.START, 1)
+	for a in areas:
+		if String(a.get("kind", "room")) == "room" and _area_size(a) < 12.0:
+			_add(out, "warning", "%s is tiny (under 12 m²). Is it meant to be a room? Make it a corridor, join it to a neighbour, or move the boundary." % doc.label_of(String(a.id)),
+				String(a.id), 1)
+	# A boundary that doesn't close its opening splits nothing.
+	for b in level.map.boundaries:
+		var t := Items.xform("boundary", b)
+		var normal := (t.basis * Vector3.BACK).normalized()
+		var mid := t * Vector3(0, 0.3, 0)
+		var one := doc.room_at(mid + normal * (LevelNav.CUT + LevelData.NAV.radius + 0.4))
+		var two := doc.room_at(mid - normal * (LevelNav.CUT + LevelData.NAV.radius + 0.4))
+		if one != "" and one == two and level.find_area(one).get("also", []).is_empty():
+			_add(out, "warning", "%s doesn't split anything: the navmesh goes round it, so both sides are still %s. Make it wide and tall enough to close the opening (R for the resize handles)." % [
+				doc.label_of(String(b.id)), doc.label_of(one)], String(b.id), 1)
+	# Can every room be walked to from the start (on the uncut navmesh)?
+	if start_room != "" and doc.nav.has("mesh"):
+		var walk: Array = LevelNav.islands(doc.nav.mesh)
+		# Bridges and moving platforms join the pieces at their two ends.
+		var group := range(walk.size())
+		for o in level.interaction.objects:
+			var ends := _carrier_ends(o)
+			if ends.size() == 2:
+				var i := _island_near(walk, ends[0])
+				var j := _island_near(walk, ends[1])
+				if i >= 0 and j >= 0:
+					var gi: int = group[i]
+					var gj: int = group[j]
+					for k in group.size():
+						if group[k] == gj:
+							group[k] = gi
+		var home := -1
+		for i in walk.size():
+			if LevelNav._island_has(walk[i], start):
+				home = group[i]
+				break
+		if home >= 0:
+			for a in areas:
+				var seeds := [a.get("seed")]
+				seeds.append_array(a.get("also", []))
+				var reached := false
+				for sd in seeds:
+					for i in walk.size():
+						if group[i] == home and LevelNav._island_has(walk[i], LevelData.vec3(sd)):
+							reached = true
+				if not reached:
+					_add(out, "warning", "Seekers can't walk from the start to %s. That's fine if a bridge, a moving platform or a teleporter gets them there; otherwise close the gap." % doc.label_of(String(a.id)),
+						String(a.id), 1)
 	# Imported models.
 	var files := {}
 	for a in level.map.assets:
@@ -186,7 +243,7 @@ static func _check_interaction(doc: EditorDoc, out: Array) -> void:
 					_add(out, "warning", "%s starts retracted and nothing ever extends it." % name, id, 2)
 	if exits == 0:
 		_add(out, "error", "There's no way out. Add a Teleporter (Interaction layer) and choose where it goes.", "", 2)
-	if depots == 0 and not level.map.rooms.is_empty():
+	if depots == 0 and not level.map.areas.is_empty():
 		_add(out, "warning", "There's no Lumidium depot. Seekers usually get one near the start and one near the exit.", "", 2)
 	for d in level.interaction.dialogues:
 		var id := String(d.get("id", ""))
@@ -221,6 +278,13 @@ static func _check_combat(doc: EditorDoc, out: Array) -> void:
 		var room := String(c.get("room", ""))
 		var name := doc.label_of(room)
 		var waves: Array = c.get("waves", [])
+		if level.find_area(room).is_empty():
+			var first := ""
+			for w in waves:
+				for e in w.get("enemies", []):
+					first = String(e.get("id", "")) if first == "" else first
+			_add(out, "error", "A fight is set for %s, but that room is gone (its floor was removed or it merged into another room). Move its enemies into a room, or delete them." % room, first, 3)
+			continue
 		for i in waves.size():
 			if (waves[i].get("enemies", []) as Array).is_empty():
 				_add(out, "error", "Wave %d of %s is empty. Place an enemy into it or delete the wave (Waves tab)." % [i + 1, name], room, 3)

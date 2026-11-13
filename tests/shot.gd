@@ -8,10 +8,15 @@ func _init() -> void:
 	app.set_layer(int(OS.get_environment("SHOT_LAYER")) if OS.get_environment("SHOT_LAYER") != "" else 1)
 	if OS.get_environment("SHOT_TOP") == "1":
 		app.toggle_top()
+	if OS.get_environment("SHOT_MODE") != "":
+		app.set_gizmo_mode(int(OS.get_environment("SHOT_MODE")))
+	if OS.get_environment("SHOT_DIST") != "":
+		app.view._dist = float(OS.get_environment("SHOT_DIST"))
+		app.view._update_camera()
 	if OS.get_environment("SHOT_SEL") != "":
 		app.doc.select(OS.get_environment("SHOT_SEL"))
 		app.view.focus(OS.get_environment("SHOT_SEL"))
-		app.view._dist = 45.0
+		app.view._dist = float(OS.get_environment("SHOT_SELDIST")) if OS.get_environment("SHOT_SELDIST") != "" else 45.0
 		app.view._update_camera()
 	for i in 40:
 		await process_frame

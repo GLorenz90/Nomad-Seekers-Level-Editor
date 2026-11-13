@@ -113,7 +113,7 @@ static func events_for(kind: String, d: Dictionary, doc: EditorDoc) -> PackedStr
 	var mine := ""
 	if kind == "enemy":
 		mine = "enemy"
-	elif kind == "room":
+	elif kind == "area":
 		mine = "combat" if not doc.level.combat_room(String(d.get("id", ""))).is_empty() else ""
 	elif kind == "object":
 		mine = String(d.get("type", ""))
