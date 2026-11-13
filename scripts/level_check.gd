@@ -175,6 +175,26 @@ static func _check_map(doc: EditorDoc, out: Array) -> void:
 			if not asset.begins_with("builtin:") and not files.has(asset):
 				_add(out, "error", "%s uses a model that isn't imported (\"%s\"). Delete it or import the model again." % [
 					doc.label_of(String(p.id)), asset], String(p.id), 1)
+	# Materials.
+	for m in level.map.get("materials", []):
+		var id := String(m.get("id", ""))
+		var shown := String(m.get("name", id))
+		var images := false
+		for key in ["albedo", "normal"]:
+			var file := String(m.get(key, ""))
+			if file == "":
+				continue
+			images = true
+			if not FileAccess.file_exists(level.dir.path_join(file)):
+				_add(out, "error", "The %s image for the material \"%s\" is missing (%s). Pick it again in the material's settings." % [
+					"colour" if key == "albedo" else "normal map", shown, file], "", 1)
+		if images and String(m.get("license", "")).strip_edges() == "":
+			_add(out, "error", "The material \"%s\" has no license for its images. Set one in its settings (right-click it in the Place list)." % shown, "", 1)
+	for p in level.map.pieces:
+		var mat := String(p.get("material", ""))
+		if mat != "" and level.find_material(mat).is_empty():
+			_add(out, "error", "%s is painted with a material that isn't in the level (\"%s\"). Pick another one in the inspector." % [
+				doc.label_of(String(p.id)), mat], String(p.id), 1)
 
 
 # --- Layer 2 ----------------------------------------------------------------------------------

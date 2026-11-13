@@ -115,7 +115,10 @@ static func resizable(kind: String, d: Dictionary) -> bool:
 ## Whether the by-sides resize handles work (anything resizable that's a
 ## plain box; a platform is placed by its stops, so it isn't).
 static func sides_resizable(kind: String, d: Dictionary) -> bool:
-	return resizable(kind, d) and not (kind == "object" and String(d.get("type", "")) == "platform")
+	if kind == "object" and String(d.get("type", "")) == "platform":
+		return false
+	# A curved wall's size runs along its curve, so its box isn't its size.
+	return resizable(kind, d) and String(d.get("asset", "")) != "builtin:curved_wall"
 
 
 ## Which of the item's own axes can be resized ([x, y, z]). A boundary is a
@@ -146,6 +149,8 @@ static func get_size(kind: String, d: Dictionary, level: LevelData) -> Vector3:
 	if kind == "boundary":
 		var dims: Array = d.get("size", [8, 4])
 		return Vector3(float(dims[0]), float(dims[1]), 0.1)
+	if String(d.get("asset", "")) == "builtin:curved_wall":
+		return LevelData.vec3(d.get("size"), Vector3(8, 3, 0.5))
 	return local_aabb(kind, d, level).size
 
 
@@ -189,8 +194,11 @@ static func local_aabb(kind: String, d: Dictionary, level: LevelData, pick := fa
 		"piece", "decoration":
 			var asset := String(d.get("asset", ""))
 			match asset:
-				"builtin:box", "builtin:ramp", "builtin:cylinder":
+				"builtin:box", "builtin:ramp", "builtin:cylinder", "builtin:stairs":
 					return _base(LevelData.vec3(d.get("size"), Vector3(4, 0.5, 4)))
+				"builtin:curved_wall":
+					var parts := LevelNav.builtin_meshes(asset, LevelData.vec3(d.get("size"), Vector3(8, 3, 0.5)), LevelNav.shape_params(d))
+					return (parts[0][1] as Transform3D) * (parts[0][0] as Mesh).get_aabb()
 				"builtin:fireflies":
 					return _base(LevelData.vec3(d.get("size"), Vector3(6, 3, 6)))
 				"builtin:light":

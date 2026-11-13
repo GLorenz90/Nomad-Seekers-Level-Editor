@@ -310,6 +310,34 @@ func _init() -> void:
 	doc.commit()
 	await bake()
 
+	# 9. The new shapes and a material: a stone dais up 5 stairs in the start
+	# room, a curved planter wall, and the start room's floor painted.
+	step("A dais up a flight of stairs, a curved planter, and a stone material")
+	var img := Image.create(64, 64, false, Image.FORMAT_RGB8)
+	var noise := FastNoiseLite.new()
+	noise.seed = 7
+	noise.frequency = 0.12
+	for y in 64:
+		for x in 64:
+			var v := 0.55 + 0.25 * noise.get_noise_2d(x, y) - (0.15 if (x % 32 == 0 or y % 16 == 0) else 0.0)
+			img.set_pixel(x, y, Color(v, v * 0.97, v * 0.9))
+	DirAccess.make_dir_recursive_absolute(dir.path_join("assets"))
+	img.save_png(dir.path_join("assets/flagstone.png"))
+	doc.level.map.materials.append({"id": "flagstone", "name": "Flagstone", "folder": "Stone", "albedo": "assets/flagstone.png",
+		"color": [1, 1, 1], "tile": 4.0, "roughness": 0.9, "license": "CC0", "author": "Nomad's Seekers"})
+	doc.add("piece", box(Vector3(4, 0, -6.5), Vector3(6, 1, 3), ROCK, "floor"))
+	doc.add("piece", {"asset": "builtin:stairs", "pos": [4, 0, -3.5], "size": [4, 1, 3], "steps": 5, "color": ROCK,
+		"surface": "floor", "material": "flagstone"})
+	doc.add("piece", {"asset": "builtin:curved_wall", "pos": [-3, 0, -4], "size": [6, 0.8, 0.4], "bend": 90.0, "color": ROCK,
+		"surface": "obstacle", "material": "flagstone"})
+	for d in doc.level.map.pieces:
+		var at := Items.get_pos("piece", d)
+		if d.get("surface") == "floor" and d.get("asset") == "builtin:box" and at.y < 0 and absf(at.x) <= 8 and absf(at.z) <= 8:
+			d.material = "flagstone"
+	doc.commit()
+	await bake()
+	step("  " + problems_summary())
+
 	# --- Compliance pass ------------------------------------------------------------------------
 	step("Compliance pass")
 	doc.remove(mistake)

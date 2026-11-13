@@ -95,6 +95,30 @@ func ask(title: String, text: String, ok_text: String, on_ok: Callable) -> void:
 	_show(dialog)
 
 
+## Asks for a line of text; calls on_ok(text) if it isn't empty.
+func ask_text(title: String, prompt: String, current: String, on_ok: Callable) -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = title
+	var box := _vbox(dialog)
+	box.add_child(_label(prompt))
+	var edit := LineEdit.new()
+	edit.text = current
+	edit.select_all_on_focus = true
+	box.add_child(edit)
+	var done := func() -> void:
+		var text := edit.text.strip_edges()
+		dialog.queue_free()
+		if text != "":
+			on_ok.call(text)
+	dialog.confirmed.connect(done)
+	edit.text_submitted.connect(func(_t: String) -> void:
+		dialog.hide()
+		done.call())
+	dialog.canceled.connect(dialog.queue_free)
+	_show(dialog)
+	edit.grab_focus.call_deferred()
+
+
 func tell(title: String, text: String) -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = title
@@ -357,16 +381,29 @@ func settings() -> void:
 
 # --- Imported models --------------------------------------------------------------------------
 
-func import_model() -> void:
+func import_model(category := "prefab", folder := "") -> void:
 	pick_file(FileDialog.FILE_MODE_OPEN_FILE, "Import a model (glTF)", PackedStringArray(["*.glb,*.gltf ; glTF models"]),
-		func(path: String) -> void: _import_details(path))
+		func(path: String) -> void: _import_details(path, category, folder))
 
 
-func _import_details(path: String) -> void:
+func _import_details(path: String, category := "prefab", folder := "") -> void:
 	var dialog := ConfirmationDialog.new()
 	dialog.title = "Import " + path.get_file()
 	dialog.ok_button_text = "Import"
 	var box := _vbox(dialog)
+	var where := _options([["prefab", "Prefabs (buildings, bridges, set pieces)"], ["decoration", "Decorations (plants, rocks, props)"]], category)
+	_row(box, "Goes in", where, "Where it's listed in the Place list. It's only for finding things; it doesn't change how the model works.")
+	var folder_edit := _folder_field(category, folder)
+	_row(box, "Folder", folder_edit, "Optional. Use / for folders inside folders, like Forest/Trees. You can rearrange them later in the Place list.")
+	where.item_selected.connect(func(index: int) -> void: _fill_folder_menu(folder_edit, String(where.get_item_metadata(index))))
+	var found := _model_materials(path)
+	var take_materials := CheckBox.new()
+	take_materials.text = "Also add its %d material%s to Materials" % [found, "" if found == 1 else "s"]
+	take_materials.button_pressed = found > 0
+	take_materials.tooltip_text = "Its colors and images become level materials you can paint onto shapes. They share this model's license."
+	if found > 0:
+		box.add_child(take_materials)
+	box.add_child(HSeparator.new())
 	box.add_child(_label("Levels can be shared, so every imported model needs a license you're allowed to share it under.", true))
 	var license := _options(LICENSES, "")
 	_row(box, "License", license)
@@ -391,16 +428,61 @@ func _import_details(path: String) -> void:
 	license.item_selected.connect(func(index: int) -> void: dialog.get_ok_button().disabled = String(license.get_item_metadata(index)) == "")
 	dialog.confirmed.connect(func() -> void:
 		var problem := import_file(path, String(license.get_selected_metadata()), author.text.strip_edges(),
-			String(surface.get_selected_metadata()), String(hitbox.get_selected_metadata()))
+			String(surface.get_selected_metadata()), String(hitbox.get_selected_metadata()),
+			String(where.get_selected_metadata()), _folder_text(folder_edit), found > 0 and take_materials.button_pressed)
 		dialog.queue_free()
 		if problem != "":
 			tell("Couldn't import the model", problem))
 	_show(dialog)
 
 
+## A folder box: type a path, or pick one of the category's folders.
+func _folder_field(category: String, current: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var edit := LineEdit.new()
+	edit.name = "Path"
+	edit.text = current
+	edit.placeholder_text = "(no folder)"
+	edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(edit)
+	var pick := MenuButton.new()
+	pick.name = "Pick"
+	pick.text = "▾"
+	pick.flat = false
+	pick.tooltip_text = "Pick an existing folder."
+	pick.get_popup().index_pressed.connect(func(index: int) -> void:
+		edit.text = String(pick.get_popup().get_item_metadata(index)))
+	row.add_child(pick)
+	_fill_folder_menu(row, category)
+	return row
+
+
+func _fill_folder_menu(field: HBoxContainer, category: String) -> void:
+	var popup := (field.get_node("Pick") as MenuButton).get_popup()
+	popup.clear()
+	popup.add_item("(no folder)")
+	popup.set_item_metadata(0, "")
+	for f in _doc().library_folders(category):
+		popup.add_item(String(f))
+		popup.set_item_metadata(popup.item_count - 1, String(f))
+
+
+func _folder_text(field: HBoxContainer) -> String:
+	return EditorDoc.clean_folder((field.get_node("Path") as LineEdit).text)
+
+
+## How many materials a glTF model brings (0 if it can't be read).
+func _model_materials(path: String) -> int:
+	var state := GLTFState.new()
+	if GLTFDocument.new().append_from_file(path, state) != OK:
+		return 0
+	return state.get_materials().size()
+
+
 ## Copies a model into the level's assets folder and lists it. Returns ""
 ## or what went wrong.
-func import_file(path: String, license: String, author: String, surface := "obstacle", hitbox := "concave") -> String:
+func import_file(path: String, license: String, author: String, surface := "obstacle", hitbox := "concave",
+		category := "prefab", folder := "", with_materials := false) -> String:
 	var doc := _doc()
 	var ext := path.get_extension().to_lower()
 	if not ext in ["glb", "gltf"]:
@@ -435,11 +517,210 @@ func import_file(path: String, license: String, author: String, surface := "obst
 	if test.append_from_file(dest, GLTFState.new()) != OK:
 		DirAccess.remove_absolute(dest)
 		return "That file couldn't be read as a glTF model."
-	doc.level.map.assets.append({"id": id, "file": "assets/" + id + "." + ext, "license": license, "author": author,
-		"surface": surface, "hitbox": hitbox})
+	var entry := {"id": id, "file": "assets/" + id + "." + ext, "license": license, "author": author,
+		"surface": surface, "hitbox": hitbox, "category": category}
+	doc.set_folder(entry, folder)
+	doc.level.map.assets.append(entry)
+	var made := extract_materials(dest, id, license, author) if with_materials else []
 	doc.commit()
-	app.toast("Imported \"%s\" as %s. It's in the Map layer's palette under Your models." % [id, String(Catalog.SURFACE_NAMES[surface]).to_lower()])
+	app.toast("Imported \"%s\" as %s, under %s%s.%s" % [id, String(Catalog.SURFACE_NAMES[surface]).to_lower(),
+		"Prefabs" if category == "prefab" else "Decorations", " / " + EditorDoc.clean_folder(folder) if EditorDoc.clean_folder(folder) != "" else "",
+		" Added %d material%s." % [made.size(), "" if made.size() == 1 else "s"] if not made.is_empty() else ""])
 	return ""
+
+
+## Turns a glTF model's materials into level materials (their images saved
+## as PNGs in assets/), in a Materials folder named after the model.
+## Returns the new material ids.
+func extract_materials(model_path: String, model_id: String, license: String, author: String) -> Array:
+	var doc := _doc()
+	var state := GLTFState.new()
+	if GLTFDocument.new().append_from_file(model_path, state) != OK:
+		return []
+	var assets := doc.level.dir.path_join("assets")
+	var out := []
+	var n := 0
+	for m in state.get_materials():
+		n += 1
+		var base := m as BaseMaterial3D
+		if base == null:
+			continue
+		var label := base.resource_name if base.resource_name != "" else "%s %d" % [model_id.capitalize(), n]
+		var id := _unique_material_id(EditorDoc.slug(model_id + "_" + label))
+		var spec := {"id": id, "name": label, "folder": model_id.capitalize(), "license": license, "author": author,
+			"color": [snappedf(base.albedo_color.r, 0.001), snappedf(base.albedo_color.g, 0.001), snappedf(base.albedo_color.b, 0.001)],
+			"roughness": snappedf(base.roughness, 0.01), "metallic": snappedf(base.metallic, 0.01), "tile": 2.0}
+		for pair in [["albedo", base.albedo_texture], ["normal", base.normal_texture if base.normal_enabled else null]]:
+			var tex: Texture2D = pair[1]
+			if tex == null:
+				continue
+			var image := tex.get_image()
+			if image == null or image.is_empty():
+				continue
+			if image.is_compressed():
+				image.decompress()
+			var file := "%s%s.png" % [id, "" if pair[0] == "albedo" else "_normal"]
+			if image.save_png(assets.path_join(file)) == OK:
+				spec[pair[0]] = "assets/" + file
+		doc.level.map.materials.append(spec)
+		out.append(id)
+	return out
+
+
+func _unique_material_id(base: String) -> String:
+	var taken := _doc().level.ids()
+	var id := base
+	var n := 2
+	while taken.has(id):
+		id = "%s_%d" % [base, n]
+		n += 1
+	return id
+
+
+# --- Materials -------------------------------------------------------------------------------
+
+## Starts a new material from an image (picked first) or from nothing.
+func import_material(folder := "") -> void:
+	pick_file(FileDialog.FILE_MODE_OPEN_FILE, "Pick a colour image for the material", PackedStringArray(["*.png,*.jpg,*.jpeg,*.webp ; Images"]),
+		func(path: String) -> void: material_dialog("", path, folder))
+
+
+## Edits a material (or makes one: id "", optionally from an image file).
+## Images picked here are copied into the level's assets folder on OK.
+func material_dialog(id := "", image_path := "", folder := "") -> void:
+	var doc := _doc()
+	var existing := doc.level.find_material(id) if id != "" else {}
+	var spec: Dictionary = existing.duplicate(true) if not existing.is_empty() else {
+		"name": image_path.get_file().get_basename().capitalize() if image_path != "" else "New material",
+		"color": [1, 1, 1], "roughness": 0.85, "metallic": 0.0, "tile": 2.0}
+	if existing.is_empty() and folder != "":
+		spec.folder = folder
+	var picked := {"albedo": image_path, "normal": ""}  # new files to copy in
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Material" if existing.is_empty() else "Material: " + String(spec.get("name", id))
+	dialog.ok_button_text = "Add material" if existing.is_empty() else "Save"
+	var box := _vbox(dialog)
+	box.add_child(_label("A material paints shapes and models. Its images repeat every \"Tile size\" metres across the world, so it looks the same on a small step and a big floor.", true))
+	var name_edit := LineEdit.new()
+	name_edit.text = String(spec.get("name", ""))
+	_row(box, "Name", name_edit)
+	var folder_edit := _folder_field("material", String(spec.get("folder", "")))
+	_row(box, "Folder", folder_edit, "Optional. Use / for folders inside folders.")
+	var image_rows := {}
+	for key in ["albedo", "normal"]:
+		var row := HBoxContainer.new()
+		var shown := Label.new()
+		shown.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		shown.clip_text = true
+		var choose := Button.new()
+		choose.text = "Choose..."
+		var clear := Button.new()
+		clear.text = "None"
+		row.add_child(shown)
+		row.add_child(choose)
+		row.add_child(clear)
+		image_rows[key] = shown
+		var k: String = key
+		var refresh := func() -> void:
+			var file := String(picked[k]) if String(picked[k]) != "" else String(spec.get(k, ""))
+			shown.text = file.get_file() if file != "" else "(none)"
+		refresh.call()
+		choose.pressed.connect(func() -> void:
+			pick_file(FileDialog.FILE_MODE_OPEN_FILE, "Pick an image", PackedStringArray(["*.png,*.jpg,*.jpeg,*.webp ; Images"]),
+				func(path: String) -> void:
+					picked[k] = path
+					refresh.call()))
+		clear.pressed.connect(func() -> void:
+			picked[k] = ""
+			spec.erase(k)
+			refresh.call())
+		_row(box, "Colour image" if key == "albedo" else "Normal map", row,
+			"The material's picture (optional: without one it's a plain color)." if key == "albedo" else "Optional bumpiness image (a normal map).")
+	var tint := ColorPickerButton.new()
+	var c := LevelData.vec3(spec.get("color"), Vector3.ONE)
+	tint.color = Color(c.x, c.y, c.z)
+	tint.custom_minimum_size = Vector2(80, 0)
+	_row(box, "Color", tint, "Multiplied with the colour image, or the whole color without one.")
+	var tile := _spin_box(float(spec.get("tile", 2.0)), 0.1, 100.0, 0.1)
+	_row(box, "Tile size (m)", tile, "How many metres one copy of the image covers.")
+	var rough := _spin_box(float(spec.get("roughness", 0.85)), 0.0, 1.0, 0.05)
+	_row(box, "Roughness", rough, "0 is glossy, 1 is matte.")
+	var metal := _spin_box(float(spec.get("metallic", 0.0)), 0.0, 1.0, 0.05)
+	_row(box, "Metallic", metal)
+	var strength := _spin_box(float(spec.get("normal_strength", 1.0)), 0.0, 4.0, 0.1)
+	_row(box, "Normal strength", strength)
+	box.add_child(HSeparator.new())
+	box.add_child(_label("Images need a license you're allowed to share them under.", true))
+	var license := _options(LICENSES, String(spec.get("license", "")))
+	_row(box, "License", license)
+	var author := LineEdit.new()
+	author.text = String(spec.get("author", ""))
+	author.placeholder_text = "Who made the images (for credit)"
+	_row(box, "Author", author)
+	dialog.confirmed.connect(func() -> void:
+		var problem := ""
+		for k in ["albedo", "normal"]:
+			if String(picked[k]) != "":
+				var copied := _copy_image(String(picked[k]))
+				if copied == "":
+					problem = "Couldn't copy %s into the level." % String(picked[k]).get_file()
+				else:
+					spec[k] = copied
+		if problem != "":
+			dialog.queue_free()
+			tell("Couldn't save the material", problem)
+			return
+		spec.name = name_edit.text.strip_edges() if name_edit.text.strip_edges() != "" else "Material"
+		doc.set_folder(spec, _folder_text(folder_edit))
+		spec.color = [snappedf(tint.color.r, 0.001), snappedf(tint.color.g, 0.001), snappedf(tint.color.b, 0.001)]
+		spec.tile = tile.value
+		spec.roughness = rough.value
+		spec.metallic = metal.value
+		spec.normal_strength = strength.value
+		spec.license = String(license.get_selected_metadata())
+		spec.author = author.text.strip_edges()
+		if existing.is_empty():
+			spec.id = _unique_material_id(EditorDoc.slug(String(spec.name)))
+			doc.level.map.materials.append(spec)
+		else:
+			existing.clear()
+			existing.merge(spec)
+		LevelMaterials.clear_cache()
+		doc.commit()
+		dialog.queue_free()
+		app.toast("Saved the material \"%s\". Click it in the Place list, then click pieces to paint them." % spec.name))
+	dialog.canceled.connect(dialog.queue_free)
+	_show(dialog, Vector2i(620, 0))
+
+
+## Copies an image into the level's assets folder; returns its level path.
+func _copy_image(path: String) -> String:
+	var ext := path.get_extension().to_lower()
+	if not LevelData.TEXTURE_FILES.has(ext):
+		return ""
+	var assets := _doc().level.dir.path_join("assets")
+	DirAccess.make_dir_recursive_absolute(assets)
+	var base := EditorDoc.slug(path.get_file().get_basename())
+	var file := base + "." + ext
+	var n := 2
+	while FileAccess.file_exists(assets.path_join(file)):
+		if FileAccess.get_md5(assets.path_join(file)) == FileAccess.get_md5(path):
+			return "assets/" + file  # the same image is already there
+		file = "%s_%d.%s" % [base, n, ext]
+		n += 1
+	if DirAccess.copy_absolute(path, assets.path_join(file)) != OK:
+		return ""
+	return "assets/" + file
+
+
+func _spin_box(value: float, lo: float, hi: float, step: float) -> SpinBox:
+	var spin := SpinBox.new()
+	spin.min_value = lo
+	spin.max_value = hi
+	spin.step = step
+	spin.value = value
+	spin.custom_minimum_size = Vector2(110, 0)
+	return spin
 
 
 func models() -> void:

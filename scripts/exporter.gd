@@ -1,8 +1,9 @@
 class_name Exporter
 extends RefCounted
-## Writes a finished copy of a level: the four JSON files and the models it
-## uses, into a folder or a zip. The copy leaves out imported models nothing
-## uses. The level being edited isn't touched.
+## Writes a finished copy of a level: the four JSON files and the models and
+## material images it uses, into a folder or a zip. The copy leaves out
+## imported models and materials nothing uses. The level being edited isn't
+## touched.
 
 
 ## A copy of the level's data, trimmed for export.
@@ -19,6 +20,11 @@ static func trimmed(level: LevelData) -> LevelData:
 			used[String(p.get("asset", ""))] = true
 	copy.map.assets = (copy.map.assets as Array).filter(
 		func(a: Dictionary) -> bool: return used.has(String(a.get("id", ""))))
+	var painted := {}
+	for p in copy.map.pieces:
+		painted[String(p.get("material", ""))] = true
+	copy.map.materials = (copy.map.get("materials", []) as Array).filter(
+		func(m: Dictionary) -> bool: return painted.has(String(m.get("id", ""))))
 	return copy
 
 
@@ -29,19 +35,22 @@ static func to_folder(level: LevelData, dest: String) -> String:
 	var err := DirAccess.make_dir_recursive_absolute(dest)
 	if err != OK:
 		return "Couldn't make the folder %s (%s)." % [dest, error_string(err)]
-	# Models first (and whatever a .gltf keeps beside it: .bin, textures).
+	# Models and material images (and whatever a .gltf keeps beside it).
 	var assets_from := source.path_join("assets")
-	if not (copy.map.assets as Array).is_empty() and source != dest:
+	var wanted := {}
+	var any_gltf := false
+	for a in copy.map.assets:
+		wanted[String(a.get("file", "")).get_file()] = true
+		any_gltf = any_gltf or String(a.get("file", "")).to_lower().ends_with(".gltf")
+	for m in copy.map.materials:
+		for key in ["albedo", "normal"]:
+			if String(m.get(key, "")) != "":
+				wanted[String(m[key]).get_file()] = true
+	if not wanted.is_empty() and source != dest:
 		DirAccess.make_dir_recursive_absolute(dest.path_join("assets"))
-		var wanted := {}
-		var any_gltf := false
-		for a in copy.map.assets:
-			wanted[String(a.get("file", "")).get_file()] = true
-			any_gltf = any_gltf or String(a.get("file", "")).to_lower().ends_with(".gltf")
 		for file in DirAccess.get_files_at(assets_from):
-			var ext := file.get_extension().to_lower()
-			var model := ext in ["glb", "gltf"]
-			if (model and wanted.has(file)) or (not model and any_gltf):
+			var model := file.get_extension().to_lower() in ["glb", "gltf"]
+			if wanted.has(file) or (not model and any_gltf):
 				err = DirAccess.copy_absolute(assets_from.path_join(file), dest.path_join("assets").path_join(file))
 				if err != OK:
 					return "Couldn't copy %s (%s)." % [file, error_string(err)]
