@@ -331,7 +331,7 @@ func snap_pos(kind: String, d: Dictionary, p: Vector3) -> Vector3:
 func _snap_door(d: Dictionary) -> void:
 	var p := LevelData.vec3(d.get("pos"))
 	for way in RoomBuilder.doorways(doc.level):
-		if (way.pos as Vector3).distance_to(p) < 2.5:
+		if not way.open and (way.pos as Vector3).distance_to(p) < 2.5:
 			d.pos = LevelData.arr3(way.pos)
 			d.yaw = way.yaw
 			return

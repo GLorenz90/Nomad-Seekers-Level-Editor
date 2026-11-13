@@ -96,7 +96,7 @@ static func _check_map(doc: EditorDoc, out: Array) -> void:
 				if not reached.has(String(a.id)):
 					continue
 				for b in rooms:
-					if not reached.has(String(b.id)) and (RoomBuilder.touching(a, b) or RoomBuilder.overlapping(a, b)):
+					if not reached.has(String(b.id)) and RoomBuilder.joined(a, b):
 						reached[String(b.id)] = true
 						grew = true
 		for r in rooms:
@@ -245,6 +245,8 @@ static func _check_combat(doc: EditorDoc, out: Array) -> void:
 				and float(p.get("chase_radius", 0.0)) < float(p.get("wander_radius", 0.0)):
 			_add(out, "error", "%s: the chase radius (%s m) is smaller than the wander radius (%s m), so it would give up on targets inside its own wander area. Make the chase radius at least %s m." % [
 				name, str(p.chase_radius), str(p.wander_radius), str(p.wander_radius)], id, 3)
+		if doc.room_at(LevelData.vec3(p.get("pos"))) == "":
+			_add(out, "error", "%s stands outside every room and corridor, so it would fall or never be reached. Move it into a room or corridor, or delete it." % name, id, 3)
 		if float(p.get("spawn_delay", 0.0)) < 0.0:
 			_add(out, "error", "%s has a negative spawn delay." % name, id, 3)
 

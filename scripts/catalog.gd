@@ -265,6 +265,9 @@ static func fields(kind: String, d: Dictionary) -> Array:
 			f.append({"k": "size", "l": "Size (wide, tall, deep)", "t": "vec3", "step": 4, "min": 4, "ystep": 1, "ymin": 3})
 			f.append({"k": "auto_build", "l": "Build floor and walls for me", "t": "bool", "rebuild": true,
 				"tip": "On: the editor makes this room's floor and walls, with doorways where other rooms and corridors touch it."})
+			f.append({"k": "joins", "l": "Where it touches a room", "t": "enum", "def": "doorway",
+				"o": [["doorway", "A 4 m doorway"], ["open", "Fully open (no wall)"], ["wall", "Solid wall (no way through)"]],
+				"tip": "What happens on an edge this room shares with another room or corridor. \"Fully open\" joins them into one big space (a plain split up by rocks, say). If the two rooms disagree, a solid wall wins over a doorway, and a doorway wins over fully open."})
 			if bool(d.get("auto_build", false)):
 				f.append({"k": "floor", "l": "Floor", "t": "bool", "def": true, "tip": "Turn off for a pit you'll bridge or build over yourself."})
 				f.append({"k": "walls", "l": "Walls", "t": "bool", "def": true})
