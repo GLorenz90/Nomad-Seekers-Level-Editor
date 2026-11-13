@@ -147,7 +147,7 @@ func welcome() -> void:
 	dialog.title = "Nomad's Seekers Level Editor"
 	dialog.ok_button_text = "Close"
 	var box := _vbox(dialog)
-	box.add_child(_label("Build a level", false, 22))
+	box.add_child(_label("Build a level", false, 18))
 	box.add_child(_label("A level is built in three layers: the Map (rooms and scenery), Interaction (doors, buttons, triggers) and Combat (enemies and waves). You can switch between them at any time.", true))
 	var buttons := HBoxContainer.new()
 	var new_button := Button.new()
@@ -290,7 +290,7 @@ func level_settings() -> void:
 	about.text_changed.connect(func() -> void: set_meta.call("description", about.text))
 	_row(box, "Description", about)
 	box.add_child(HSeparator.new())
-	box.add_child(_label("Lighting", false, 17))
+	box.add_child(_label("Lighting", false, 15))
 	box.add_child(_label("Sliders stop where a level would become too dark to see or uncomfortably bright. For a room that's meant to be dark, use the Darkness hazard.", true))
 	var lighting: Dictionary = doc.level.map.lighting
 	var preset := _options([["day", "Day"], ["dusk", "Dusk"], ["overcast", "Overcast"], ["night", "Night"], ["cave", "Cave"], ["interior", "Indoors"]],
@@ -327,7 +327,7 @@ func settings() -> void:
 			["game_dir", "Game folder", "The Nomad's Seekers project folder (the one with project.godot). Needed to playtest, to list the game's enemies and areas, and to export straight into the game.", FileDialog.FILE_MODE_OPEN_DIR, AppSettings.game_dir()],
 			["run_with", "Run the game with", "The Godot program (it runs the game folder), or a built copy of the game. Used by Playtest. Leave empty to use the Godot this editor is running on.", FileDialog.FILE_MODE_OPEN_FILE, String(AppSettings.get_value("run_with", ""))],
 			["library_dir", "My levels folder", "Where new levels are made.", FileDialog.FILE_MODE_OPEN_DIR, AppSettings.library_dir()]]:
-		box.add_child(_label(spec[1], false, 16))
+		box.add_child(_label(spec[1], false, 14))
 		box.add_child(_label(spec[2], true))
 		var row := HBoxContainer.new()
 		var edit := LineEdit.new()
@@ -532,7 +532,7 @@ func edit_rule(rule: Dictionary) -> void:
 	dialog.title = "New trigger" if String(_rule.get("id", "")) == "" else "Edit trigger"
 	dialog.ok_button_text = "Save trigger"
 	var outer := _vbox(dialog)
-	_rule_text = _label("", false, 17)
+	_rule_text = _label("", false, 15)
 	_rule_text.custom_minimum_size = Vector2(760, 50)
 	_rule_text.add_theme_color_override("font_color", Color(0.65, 0.95, 0.7))
 	outer.add_child(_rule_text)
@@ -568,7 +568,7 @@ func _fill_rule() -> void:
 	var touch := func() -> void: _rule_text.text = Wiring.describe(_rule, doc)
 	var when: Dictionary = _rule.when
 	# --- When
-	_rule_box.add_child(_label("WHEN", false, 16))
+	_rule_box.add_child(_label("WHEN", false, 14))
 	var event := String(when.get("event", ""))
 	var event_options := [["", "Choose what sets it off..."]] if event == "" else []
 	for row in Wiring.EVENTS:
@@ -637,7 +637,7 @@ func _fill_rule() -> void:
 			_row(_rule_box, "Ending with", choice_pick)
 	# --- Only if
 	_rule_box.add_child(HSeparator.new())
-	_rule_box.add_child(_label("ONLY IF (optional)", false, 16))
+	_rule_box.add_child(_label("ONLY IF (optional)", false, 14))
 	var checks: Array = _rule.get("if", [])
 	for i in checks.size():
 		_rule_box.add_child(_condition_row(checks, i, touch))
@@ -651,7 +651,7 @@ func _fill_rule() -> void:
 	_rule_box.add_child(add_check)
 	# --- Do
 	_rule_box.add_child(HSeparator.new())
-	_rule_box.add_child(_label("DO (in this order)", false, 16))
+	_rule_box.add_child(_label("DO (in this order)", false, 14))
 	var actions: Array = _rule["do"]
 	for i in actions.size():
 		_rule_box.add_child(_action_row(actions, i, touch))
@@ -913,7 +913,7 @@ func export_level() -> void:
 		box.add_child(list)
 	if errors.is_empty():
 		box.add_child(HSeparator.new())
-		box.add_child(_label("Export to", false, 17))
+		box.add_child(_label("Export to", false, 15))
 		var folder_name := EditorDoc.slug(String(doc.level.meta.get("name", "level")))
 		if AppSettings.has_game():
 			var row := HBoxContainer.new()
