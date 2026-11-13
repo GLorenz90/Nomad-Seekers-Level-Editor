@@ -3,11 +3,14 @@ extends SubViewportContainer
 ## The 3D view: shows the level, and lets you look around, pick things,
 ## drag them and place new ones.
 ##
-## Mouse:  left click = select (or place, while placing); left drag = move;
-##         right drag = look around; middle drag (or Shift + right drag) = pan;
-##         wheel = zoom.
+## Mouse:  left click = select (or place, while placing); left drag = move
+##         along the ground; the handles (W move, E rotate, R resize) work
+##         like Godot's; right drag = look around (WASD flies while held);
+##         middle drag (or Shift + right drag) = pan; wheel = zoom.
 ## Only the active layer's items can be picked, so walls never get in the
-## way of the door you're trying to click.
+## way of the door you're trying to click. The navmesh is drawn on top of
+## the floors, one color per room; clicking it picks the room when "Click
+## picks: Rooms" is on (always on Layer 3).
 
 signal hint(text: String)
 signal placed(id: String)
@@ -26,6 +29,10 @@ var doc: EditorDoc
 ## Show the other layers' items too (dimmed by having no name tags).
 var show_all_layers := true
 var show_wires := true
+var show_nav := true
+## Layer 1: clicks pick rooms (navmesh) instead of pieces.
+var pick_rooms := false
+var gizmo: TransformGizmo
 
 var _vp: SubViewport
 var _camera: Camera3D
@@ -33,6 +40,7 @@ var _env: WorldEnvironment
 var _sun: DirectionalLight3D
 var _items: Node3D
 var _overlay: Node3D
+var _nav: Node3D
 var _ghost: Node3D
 var _nodes := {}
 
@@ -48,6 +56,7 @@ var _drag := {}
 var _placing := {}
 var _ghost_pos := Vector3.INF
 var _press_at := Vector2.ZERO
+var _nav_selected_area := ""
 
 
 func _init() -> void:
@@ -71,13 +80,20 @@ func _init() -> void:
 	_vp.add_child(_grid())
 	_items = Node3D.new()
 	_vp.add_child(_items)
+	_nav = Node3D.new()
+	_vp.add_child(_nav)
 	_overlay = Node3D.new()
 	_vp.add_child(_overlay)
+	gizmo = TransformGizmo.new()
+	gizmo.camera = _camera
+	_vp.add_child(gizmo)
 	_update_camera()
 
 
 func set_doc(d: EditorDoc) -> void:
 	doc = d
+	gizmo.doc = d
+	doc.nav_updated.connect(refresh_nav)
 	cancel_place()
 	_target = LevelData.vec3(doc.level.map.start.get("pos"))
 	rebuild()
@@ -93,10 +109,9 @@ func rebuild() -> void:
 		return
 	_apply_lighting()
 	var layer: int = app.layer
-	for p in doc.level.map.pieces:
-		if p.has("generated_for"):
-			_items.add_child(ItemVisuals.build("piece", p, doc))
 	for it in doc.items():
+		if it.kind == "area":
+			continue
 		var its_layer: int = EditorDoc.KIND_LAYER[it.kind]
 		var mine: bool = its_layer == layer
 		if not mine and its_layer != 1 and not show_all_layers:
@@ -107,12 +122,67 @@ func rebuild() -> void:
 	refresh_overlay()
 
 
+## The navmesh: each piece in its room's color (grey for crumbs too small to
+## be a room), the selected room brighter, every polygon outlined.
+func refresh_nav() -> void:
+	for child in _nav.get_children():
+		child.free()
+	if doc == null or not show_nav or doc.nav.is_empty():
+		return
+	var colors := {}
+	for a in doc.level.map.areas:
+		colors[String(a.id)] = ItemVisuals._color(a.get("color"), Color(0.4, 0.6, 0.95))
+	var fill := ImmediateMesh.new()
+	var edges := PackedVector3Array()
+	var lift := Vector3(0, 0.06, 0)
+	var any := false
+	for island in doc.nav.islands:
+		var area := String(island.get("area", ""))
+		var c: Color = colors.get(area, Color(0.55, 0.55, 0.55))
+		c.a = 0.62 if area != "" and area == doc.selected else 0.36
+		for poly in island.polys:
+			if not any:
+				fill.surface_begin(Mesh.PRIMITIVE_TRIANGLES, ItemVisuals.nav_material())
+				any = true
+			for k in range(1, poly.size() - 1):
+				for v in [poly[0], poly[k], poly[k + 1]]:
+					fill.surface_set_color(c)
+					fill.surface_add_vertex(v + lift)
+			for k in poly.size():
+				edges.append(poly[k] + lift)
+				edges.append(poly[(k + 1) % poly.size()] + lift)
+	if any:
+		fill.surface_end()
+		var mi := MeshInstance3D.new()
+		mi.mesh = fill
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_nav.add_child(mi)
+		_nav.add_child(ItemVisuals.lines(edges, Color(1, 1, 1, 0.07)))
+	# Room names over each room.
+	for a in doc.level.map.areas:
+		var tag := Label3D.new()
+		tag.text = Catalog.label("area", a, String(a.id))
+		tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		tag.no_depth_test = true
+		tag.fixed_size = true
+		tag.pixel_size = 0.0011
+		tag.font_size = 30
+		tag.outline_size = 8
+		tag.modulate = colors.get(String(a.id), Color.WHITE).lightened(0.4)
+		tag.position = LevelData.vec3(a.get("seed")) + Vector3(0, 1.2, 0)
+		_nav.add_child(tag)
+
+
 ## The selection box, enemy rings and trigger lines.
 func refresh_overlay() -> void:
 	for child in _overlay.get_children():
 		child.free()
+	gizmo.refresh()
 	if doc == null:
 		return
+	if not doc.nav.is_empty() and (doc.kind_of(doc.selected) == "area" or _nav_selected_area != ""):
+		refresh_nav()
+	_nav_selected_area = doc.selected if doc.kind_of(doc.selected) == "area" else ""
 	var layer: int = app.layer
 	if show_wires and layer >= 2:
 		var about := doc.rules_about(doc.selected) if doc.selected != "" else {"from": [], "onto": []}
@@ -131,12 +201,14 @@ func refresh_overlay() -> void:
 					_wire(doc.position_of(String(o[key])), Items.get_pos("object", o),
 						Color(1.0, 0.7, 0.3) if doc.selected == String(o.id) else Color(0.5, 0.6, 0.75, 0.6))
 	var it := doc.item(doc.selected)
-	if it.is_empty():
+	if it.is_empty() or it.kind == "area":
 		return
 	var box := Items.local_aabb(it.kind, it.data, doc.level).grow(0.05)
 	var outline := ItemVisuals.lines(ItemVisuals.box_edges(box), Color(1.0, 0.9, 0.2), true)
 	outline.transform = Items.xform(it.kind, it.data)
 	_overlay.add_child(outline)
+	if it.kind == "piece":
+		_show_hitbox(it.data)
 	if it.kind == "enemy":
 		var at := Items.get_pos(it.kind, it.data) + Vector3(0, 0.08, 0)
 		var bad := LevelData.placement_problem(it.data) != ""
@@ -147,6 +219,23 @@ func refresh_overlay() -> void:
 		var e := Catalog.enemy(String(it.data.get("enemy", "")))
 		var aggro := float(e.get("aggro", 14.0)) * float(LevelData.AGGRO.get(String(it.data.get("aggro", "normal")), 1.0))
 		_ring(at, aggro, Color(0.6, 0.75, 1.0, 0.5))
+
+
+## The selected piece's collision, as Godot builds it (the game builds the same).
+func _show_hitbox(d: Dictionary) -> void:
+	var hit := LevelNav.hitbox(d, doc.level, doc.model_loader())
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.4, 1.0, 0.85, 0.55)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.no_depth_test = true
+	for pair in hit.shapes:
+		var mi := MeshInstance3D.new()
+		mi.mesh = (pair[0] as Shape3D).get_debug_mesh()
+		mi.material_override = mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.transform = (hit.xform as Transform3D) * (pair[1] as Transform3D)
+		_overlay.add_child(mi)
 
 
 func _ring(at: Vector3, radius: float, color: Color) -> void:
@@ -231,8 +320,8 @@ func focus(id := "") -> void:
 	if it.is_empty():
 		var box := AABB()
 		var first := true
-		for r in doc.level.map.rooms:
-			var b := AABB(LevelData.vec3(r.get("pos")) - LevelData.vec3(r.get("size")) * Vector3(0.5, 0, 0.5), LevelData.vec3(r.get("size")))
+		for p in doc.level.map.pieces:
+			var b := Items.xform("piece", p) * Items.local_aabb("piece", p, doc.level)
 			box = b if first else box.merge(b)
 			first = false
 		if first:
@@ -252,14 +341,17 @@ func focus(id := "") -> void:
 func _process(delta: float) -> void:
 	if not has_focus() or Input.is_key_pressed(KEY_CTRL):
 		return
+	# Arrow keys always pan; W A S D only while looking around (right mouse
+	# held), as in Godot, so W / E / R are free for the handles.
+	var fly := _orbiting
 	var move := Vector2.ZERO
-	if Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_A):
+	if Input.is_key_pressed(KEY_LEFT) or (fly and Input.is_key_pressed(KEY_A)):
 		move.x -= 1.0
-	if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_D):
+	if Input.is_key_pressed(KEY_RIGHT) or (fly and Input.is_key_pressed(KEY_D)):
 		move.x += 1.0
-	if Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_W):
+	if Input.is_key_pressed(KEY_UP) or (fly and Input.is_key_pressed(KEY_W)):
 		move.y += 1.0
-	if Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_S):
+	if Input.is_key_pressed(KEY_DOWN) or (fly and Input.is_key_pressed(KEY_S)):
 		move.y -= 1.0
 	if move != Vector2.ZERO:
 		_pan(move * _dist * delta * 0.9)
@@ -285,17 +377,17 @@ func ground_point(at: Vector2, y := 0.0) -> Vector3:
 	return hit if hit != null else Vector3.INF
 
 
-## The id under the mouse among the active layer's items ("" if none).
+## The id under the mouse ("" if none): the active layer's items, or a room
+## (its navmesh) on Layer 3, or on Layer 1 with pick_rooms on.
 func pick(at: Vector2) -> String:
+	var layer: int = app.layer
+	if layer == 1 and pick_rooms:
+		return pick_area(at)
 	var ray := _ray(at)
 	var best := ""
 	var best_dist := INF
-	var best_room := ""
-	var best_room_dist := INF
-	var layer: int = app.layer
 	for it in doc.items():
-		var is_room: bool = it.kind == "room"
-		if EditorDoc.KIND_LAYER[it.kind] != layer and not (is_room and layer == 3):
+		if it.kind == "area" or EditorDoc.KIND_LAYER[it.kind] != layer:
 			continue
 		var xf := Items.xform(it.kind, it.data)
 		var inv := xf.affine_inverse()
@@ -304,37 +396,62 @@ func pick(at: Vector2) -> String:
 		if hit == null:
 			continue
 		var dist := (xf * (hit as Vector3)).distance_to(ray[0])
-		if is_room:
-			if dist < best_room_dist:
-				best_room_dist = dist
-				best_room = it.id
-		elif dist < best_dist:
+		if dist < best_dist:
 			best_dist = dist
 			best = it.id
-	return best if best != "" else best_room
+	if best == "" and layer == 3:
+		return pick_area(at)
+	return best
 
 
-func snap_pos(kind: String, d: Dictionary, p: Vector3) -> Vector3:
-	if kind == "room":
-		var s := LevelData.vec3(d.get("size"), Vector3(16, 6, 16))
-		p.x = snappedf(p.x - s.x * 0.5, LevelData.GRID) + s.x * 0.5
-		p.z = snappedf(p.z - s.z * 0.5, LevelData.GRID) + s.z * 0.5
-		return p
+## The room (area) whose navmesh is under the mouse ("" if none).
+func pick_area(at: Vector2) -> String:
+	if doc.nav.is_empty():
+		return ""
+	var ray := _ray(at)
+	var best := ""
+	var best_dist := INF
+	for island in doc.nav.islands:
+		if String(island.get("area", "")) == "":
+			continue
+		for poly in island.polys:
+			for k in range(1, poly.size() - 1):
+				var hit = Geometry3D.ray_intersects_triangle(ray[0], ray[1], poly[0], poly[k], poly[k + 1])
+				if hit != null and (hit as Vector3).distance_to(ray[0]) < best_dist:
+					best_dist = (hit as Vector3).distance_to(ray[0])
+					best = String(island.area)
+	return best
+
+
+## Where a placed item lands under the mouse: on top of whatever the ray
+## hits first (a floor, a block), else on the ground plane.
+func surface_point(at: Vector2) -> Vector3:
+	var ray := _ray(at)
+	var best := Vector3.INF
+	var best_dist := INF
+	for p in doc.level.map.pieces:
+		if doc.level.surface_of(p) == "intangible":
+			continue
+		var xf := Items.xform("piece", p)
+		var inv := xf.affine_inverse()
+		var box := Items.local_aabb("piece", p, doc.level)
+		var hit = box.intersects_ray(inv * (ray[0] as Vector3), inv.basis * (ray[1] as Vector3))
+		if hit == null:
+			continue
+		var world := xf * (hit as Vector3)
+		var dist := world.distance_to(ray[0])
+		if dist < best_dist:
+			best_dist = dist
+			best = world
+	return best if best != Vector3.INF else ground_point(at)
+
+
+func snap_pos(_kind: String, _d: Dictionary, p: Vector3) -> Vector3:
 	var step: float = app.snap_step
 	if step > 0.0 and not Input.is_key_pressed(KEY_ALT):
 		p.x = snappedf(p.x, step)
 		p.z = snappedf(p.z, step)
 	return p
-
-
-## Doors jump onto a doorway when they're close to one.
-func _snap_door(d: Dictionary) -> void:
-	var p := LevelData.vec3(d.get("pos"))
-	for way in RoomBuilder.doorways(doc.level):
-		if not way.open and (way.pos as Vector3).distance_to(p) < 2.5:
-			d.pos = LevelData.arr3(way.pos)
-			d.yaw = way.yaw
-			return
 
 
 # --- Placing ----------------------------------------------------------------------------------
@@ -343,7 +460,7 @@ func _snap_door(d: Dictionary) -> void:
 func begin_place(entry: Dictionary) -> void:
 	cancel_place()
 	_placing = entry
-	hint.emit("Click to place %s. R turns it. Keep clicking to place more. Esc or right-click to stop." % entry.title)
+	hint.emit("Click to place %s. R turns it a quarter turn while placing. Keep clicking to place more. Esc or right-click to stop." % entry.title)
 
 
 func cancel_place() -> void:
@@ -374,20 +491,14 @@ func _template_at(entry: Dictionary, p: Vector3) -> Dictionary:
 	if kind == "object" and String(d.get("type", "")) == "platform":
 		d.points = [LevelData.arr3(p), LevelData.arr3(p + Vector3(0, 0, -8))]
 	elif kind == "object" and String(d.get("type", "")) == "hazard":
-		var room := doc.level.find_room(doc.room_at(p))
-		if room.is_empty():
-			d.zones = [{"pos": LevelData.arr3(p), "size": [8, 4, 8]}]
-		else:
-			d.zones = [{"pos": room.get("pos"), "size": room.get("size")}]
+		d.zones = [{"pos": LevelData.arr3(p), "size": [8, 4, 8]}]
 	else:
 		d.pos = LevelData.arr3(p)
-		if kind == "object" and String(d.get("type", "")) == "door":
-			_snap_door(d)
 	return d
 
 
 func _move_ghost(at: Vector2) -> void:
-	var p := ground_point(at)
+	var p := surface_point(at)
 	if p == Vector3.INF:
 		return
 	var d := _template_at(_placing, p)
@@ -402,7 +513,7 @@ func _move_ghost(at: Vector2) -> void:
 
 
 func _place(at: Vector2) -> void:
-	var p := ground_point(at)
+	var p := surface_point(at)
 	if p == Vector3.INF:
 		return
 	var d := _template_at(_placing, p)
@@ -446,10 +557,18 @@ func _gui_input(event: InputEvent) -> void:
 					if is_placing():
 						_place(mb.position)
 					else:
-						var id := pick(mb.position)
-						doc.select(id)
-						_begin_drag(id, mb.position)
+						var handle := gizmo.hit(mb.position)
+						if handle != "":
+							gizmo.snap_step = app.snap_step
+							gizmo.start(handle, mb.position)
+						else:
+							var id := pick(mb.position)
+							doc.select(id)
+							_begin_drag(id, mb.position)
 				else:
+					if gizmo.finish():
+						_after_move(doc.selected)
+						doc.commit()
 					_end_drag()
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
@@ -459,16 +578,28 @@ func _gui_input(event: InputEvent) -> void:
 			_update_camera()
 		elif _panning:
 			_pan(Vector2(-mm.relative.x, mm.relative.y) * _dist * 0.0016)
+		elif gizmo.is_dragging():
+			gizmo.drag(mm.position, Input.is_key_pressed(KEY_ALT))
+			var it := doc.item(doc.selected)
+			var node: Node3D = _nodes.get(doc.selected)
+			if node and not it.is_empty():
+				if Items.resizable(it.kind, it.data) and gizmo.mode == TransformGizmo.Mode.SCALE:
+					rebuild()
+				else:
+					node.transform = Items.xform(it.kind, it.data)
+					refresh_overlay()
 		elif not _drag.is_empty():
 			_drag_to(mm.position)
 		elif is_placing():
 			_move_ghost(mm.position)
+		else:
+			gizmo.hit(mm.position)
 
 
 func _begin_drag(id: String, at: Vector2) -> void:
 	_drag = {}
 	var it := doc.item(id)
-	if it.is_empty():
+	if it.is_empty() or not Items.movable(it.kind):
 		return
 	var pos := Items.get_pos(it.kind, it.data)
 	var hit := ground_point(at, pos.y)
@@ -491,21 +622,20 @@ func _drag_to(at: Vector2) -> void:
 		return
 	_drag.moved = true
 	Items.set_pos(kind, d, p)
-	if kind == "object" and String(d.get("type", "")) == "door":
-		_snap_door(d)
-	if kind == "room":
-		doc.normalize()  # walls and doorways follow the room
-		rebuild()
-	else:
-		var node: Node3D = _nodes.get(_drag.id)
-		if node:
-			node.transform = Items.xform(kind, d)
-		refresh_overlay()
+	var node: Node3D = _nodes.get(_drag.id)
+	if node:
+		node.transform = Items.xform(kind, d)
+	refresh_overlay()
 
 
 func _end_drag() -> void:
 	if not _drag.is_empty() and _drag.moved:
-		if _drag.kind == "enemy":
-			doc.settle_enemy(_drag.id)
+		_after_move(_drag.id)
 		doc.commit()
 	_drag = {}
+
+
+## Enemies that moved join the waves of the room they now stand in.
+func _after_move(id: String) -> void:
+	if doc.kind_of(id) == "enemy":
+		doc.settle_enemy(id)

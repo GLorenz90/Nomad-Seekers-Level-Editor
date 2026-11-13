@@ -21,21 +21,21 @@
 			"id": "door_1",
 			"label": "LOCKED",
 			"pos": [
-				8.0,
-				0.0,
-				0.0
+				8,
+				0,
+				0
 			],
 			"start": "closed",
 			"type": "door",
-			"yaw": 90.0
+			"yaw": 90
 		},
 		{
 			"id": "plate_1",
 			"mode": "floor",
 			"pos": [
-				0.0,
-				0.0,
-				4.0
+				2,
+				0,
+				4
 			],
 			"type": "button"
 		},
@@ -45,18 +45,18 @@
 			"id": "teleporter_1",
 			"label": "Back to Nomad-2",
 			"pos": [
-				212.0,
-				0.0,
-				6.0
+				212,
+				0,
+				6
 			],
 			"type": "teleporter"
 		},
 		{
 			"id": "depot_1",
 			"pos": [
-				-5.0,
-				0.0,
-				-5.0
+				-5,
+				0,
+				-5
 			],
 			"type": "lumidium_depot"
 		},
@@ -65,22 +65,22 @@
 			"label": "LOCKED",
 			"open_when_cleared": "hound_den",
 			"pos": [
-				40.0,
-				0.0,
-				0.0
+				40,
+				0,
+				0
 			],
 			"start": "closed",
 			"type": "door",
-			"yaw": 90.0
+			"yaw": 90
 		},
 		{
 			"id": "door_3",
 			"label": "LOCKED",
 			"open_when_cleared": "ruin_hall",
 			"pos": [
-				48.0,
-				0.0,
-				8.0
+				48,
+				0,
+				8
 			],
 			"start": "closed",
 			"type": "door"
@@ -90,21 +90,21 @@
 			"label": "LOCKED",
 			"open_when_cleared": "ooze_cellar",
 			"pos": [
-				56.0,
-				0.0,
-				48.0
+				56,
+				0,
+				48
 			],
 			"start": "closed",
 			"type": "door",
-			"yaw": 90.0
+			"yaw": 90
 		},
 		{
 			"id": "zone_1",
 			"once": true,
 			"pos": [
-				48.0,
-				0.0,
-				-2.0
+				44,
+				0,
+				0
 			],
 			"size": [
 				8,
@@ -117,19 +117,19 @@
 			"contents": "random",
 			"id": "box_1",
 			"pos": [
-				42.0,
-				0.0,
-				28.0
+				42,
+				0,
+				28
 			],
 			"type": "box"
 		},
 		{
-			"color": "fire",
+			"color": "nature",
 			"id": "crystal_1",
 			"pos": [
-				54.0,
-				0.0,
-				52.0
+				54,
+				0,
+				52
 			],
 			"type": "lumidium_node",
 			"yield": 3
@@ -138,17 +138,12 @@
 			"active": true,
 			"id": "mist_1",
 			"kind": "poison_mist",
-			"pos": [
-				88.0,
-				0.0,
-				48.0
-			],
 			"type": "hazard",
 			"zones": [
 				{
 					"pos": [
 						88,
-						0,
+						-0.5,
 						48
 					],
 					"size": [
@@ -164,37 +159,37 @@
 			"label": "Vent",
 			"mode": "press",
 			"pos": [
-				70.0,
-				0.0,
-				42.0
+				68,
+				0,
+				42
 			],
 			"type": "button"
 		},
 		{
 			"extended": false,
 			"id": "bridge_1",
-			"length": 8,
+			"length": 4,
 			"pos": [
-				104.0,
-				0.0,
-				4.0
+				106,
+				0,
+				0
 			],
 			"type": "bridge",
 			"width": 4,
-			"yaw": 90.0
+			"yaw": 90
 		},
 		{
 			"id": "platform_1",
 			"mode": "ping_pong",
 			"points": [
 				[
-					124,
+					126,
 					0,
 					0
 				],
 				[
-					132,
-					0.5,
+					130,
+					0,
 					0
 				]
 			],
@@ -212,9 +207,9 @@
 			"contents": "item",
 			"id": "box_2",
 			"pos": [
-				152.0,
-				0.0,
-				-20.0
+				152,
+				0,
+				-20
 			],
 			"type": "box"
 		},
@@ -222,9 +217,9 @@
 			"color": "fire",
 			"id": "crystal_2",
 			"pos": [
-				148.0,
-				0.0,
-				-18.0
+				148,
+				0,
+				-18
 			],
 			"type": "lumidium_node",
 			"yield": 3
@@ -233,18 +228,18 @@
 			"id": "trap_1",
 			"kind": "damage",
 			"pos": [
-				176.0,
-				0.0,
-				2.0
+				176,
+				0,
+				2
 			],
 			"type": "trap"
 		},
 		{
 			"id": "depot_2",
 			"pos": [
-				220.0,
-				0.0,
-				8.0
+				220,
+				0,
+				8
 			],
 			"type": "lumidium_depot"
 		}

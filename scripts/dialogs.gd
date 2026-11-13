@@ -226,8 +226,6 @@ func new_level() -> void:
 	var name_edit := LineEdit.new()
 	name_edit.placeholder_text = "Mossy Glade"
 	_row(box, "Name", name_edit)
-	var size := _size_options("small")
-	_row(box, "Size", size, "How long a run is. Only rooms count; corridors don't. You can change it later.")
 	var area := LineEdit.new()
 	area.placeholder_text = "forest_1 (optional)"
 	_row(box, "Area", area, "The area this level belongs to, like forest_1 or forest_boss. The game picks one level per area each session. You can leave it empty for now.")
@@ -237,7 +235,7 @@ func new_level() -> void:
 	var light := _options([["day", "Day"], ["dusk", "Dusk"], ["overcast", "Overcast"], ["night", "Night"], ["cave", "Cave"], ["interior", "Indoors"]], "day")
 	_row(box, "Lighting", light)
 	var starter := CheckBox.new()
-	starter.text = "Start me off with a first room"
+	starter.text = "Start me off with a 16 x 16 m floor"
 	starter.button_pressed = true
 	box.add_child(starter)
 	box.add_child(_label("It's saved in: " + AppSettings.library_dir(), true))
@@ -250,10 +248,10 @@ func new_level() -> void:
 		while DirAccess.dir_exists_absolute(dir):
 			dir = AppSettings.library_dir().path_join("%s_%d" % [EditorDoc.slug(level_name), n])
 			n += 1
-		var doc := EditorDoc.create(level_name, String(size.get_selected_metadata()), EditorDoc.slug(area.text) if area.text.strip_edges() != "" else "", dir)
+		var doc := EditorDoc.create(level_name, EditorDoc.slug(area.text) if area.text.strip_edges() != "" else "", dir)
 		doc.level.map.lighting.preset = light.get_selected_metadata()
 		if starter.button_pressed:
-			doc.add("room", {"kind": "room", "name": "Start", "pos": [0, 0, 0], "size": [16, 6, 16], "auto_build": true})
+			doc.add("piece", {"asset": "builtin:box", "size": [16, 0.5, 16], "pos": [0, -0.5, 0], "surface": "floor", "color": Catalog.FLOOR_COLOR})
 			doc.level.map.start = {"pos": [0, 0.1, 4], "yaw": 0}
 		doc._reset_history()
 		var err := doc.save()
@@ -284,9 +282,7 @@ func level_settings() -> void:
 		var key: String = spec[0]
 		edit.text_changed.connect(func(text: String) -> void: set_meta.call(key, EditorDoc.slug(text) if key == "area" and text.strip_edges() != "" else text))
 		_row(box, spec[1], edit, spec[2])
-	var size := _size_options(String(meta.get("size", "small")))
-	size.item_selected.connect(func(index: int) -> void: set_meta.call("size", size.get_item_metadata(index)))
-	_row(box, "Size", size, "Only rooms count toward the size; corridors don't.")
+	box.add_child(_label("Size: " + Inspector.size_summary(doc.level) + " The size follows the room count.", true))
 	var about := TextEdit.new()
 	about.text = String(meta.get("description", ""))
 	about.custom_minimum_size.y = 70
@@ -377,10 +373,25 @@ func _import_details(path: String) -> void:
 	var author := LineEdit.new()
 	author.placeholder_text = "Who made it (for credit)"
 	_row(box, "Author", author)
+	box.add_child(HSeparator.new())
+	var surface := _surface_options("obstacle")
+	_row(box, "Acts as", surface, "\n".join(Catalog.SURFACE_HELP.values()))
+	var surface_help := _label(Catalog.SURFACE_HELP.obstacle, true)
+	box.add_child(surface_help)
+	var hitbox := _hitbox_options("concave")
+	_row(box, "Hitbox", hitbox, "How its collision is made from its shape.")
+	var hitbox_help := _label("Concave follows every triangle (exact; best for floors, arches and buildings). Convex wraps it in one hull (faster; fine for rocks, crates and barrels, but fills in arches).", true)
+	box.add_child(hitbox_help)
+	box.add_child(_label("You can change these later for the model (Level > Imported models) or for any one placed copy (in the inspector).", true))
+	surface.item_selected.connect(func(index: int) -> void:
+		var key := String(surface.get_item_metadata(index))
+		surface_help.text = String(Catalog.SURFACE_HELP[key])
+		hitbox.disabled = key == "intangible")
 	dialog.get_ok_button().disabled = true
 	license.item_selected.connect(func(index: int) -> void: dialog.get_ok_button().disabled = String(license.get_item_metadata(index)) == "")
 	dialog.confirmed.connect(func() -> void:
-		var problem := import_file(path, String(license.get_selected_metadata()), author.text.strip_edges())
+		var problem := import_file(path, String(license.get_selected_metadata()), author.text.strip_edges(),
+			String(surface.get_selected_metadata()), String(hitbox.get_selected_metadata()))
 		dialog.queue_free()
 		if problem != "":
 			tell("Couldn't import the model", problem))
@@ -389,7 +400,7 @@ func _import_details(path: String) -> void:
 
 ## Copies a model into the level's assets folder and lists it. Returns ""
 ## or what went wrong.
-func import_file(path: String, license: String, author: String) -> String:
+func import_file(path: String, license: String, author: String, surface := "obstacle", hitbox := "concave") -> String:
 	var doc := _doc()
 	var ext := path.get_extension().to_lower()
 	if not ext in ["glb", "gltf"]:
@@ -424,9 +435,10 @@ func import_file(path: String, license: String, author: String) -> String:
 	if test.append_from_file(dest, GLTFState.new()) != OK:
 		DirAccess.remove_absolute(dest)
 		return "That file couldn't be read as a glTF model."
-	doc.level.map.assets.append({"id": id, "file": "assets/" + id + "." + ext, "license": license, "author": author})
+	doc.level.map.assets.append({"id": id, "file": "assets/" + id + "." + ext, "license": license, "author": author,
+		"surface": surface, "hitbox": hitbox})
 	doc.commit()
-	app.toast("Imported \"%s\". It's in the Map layer's palette under Imported models." % id)
+	app.toast("Imported \"%s\" as %s. It's in the Map layer's palette under Your models." % [id, String(Catalog.SURFACE_NAMES[surface]).to_lower()])
 	return ""
 
 
@@ -454,6 +466,20 @@ func models() -> void:
 			a.license = license.get_item_metadata(index)
 			doc.commit())
 		row.add_child(license)
+		var surface := _surface_options(String(a.get("surface", "obstacle")))
+		surface.tooltip_text = "\n".join(Catalog.SURFACE_HELP.values())
+		var hitbox := _hitbox_options(String(a.get("hitbox", "concave")))
+		hitbox.tooltip_text = "Concave follows every triangle; convex wraps it in one hull."
+		hitbox.disabled = String(a.get("surface", "obstacle")) == "intangible"
+		surface.item_selected.connect(func(index: int) -> void:
+			a.surface = surface.get_item_metadata(index)
+			hitbox.disabled = a.surface == "intangible"
+			doc.commit())
+		hitbox.item_selected.connect(func(index: int) -> void:
+			a.hitbox = hitbox.get_item_metadata(index)
+			doc.commit())
+		row.add_child(surface)
+		row.add_child(hitbox)
 		var author := LineEdit.new()
 		author.text = String(a.get("author", ""))
 		author.placeholder_text = "Author"
@@ -479,7 +505,18 @@ func models() -> void:
 		import_model())
 	box.add_child(add)
 	dialog.confirmed.connect(dialog.queue_free)
-	_show(dialog, Vector2i(760, 0))
+	_show(dialog, Vector2i(1000, 0))
+
+
+func _surface_options(current: String) -> OptionButton:
+	var options := []
+	for key in LevelData.SURFACES:
+		options.append([key, Catalog.SURFACE_NAMES[key]])
+	return _options(options, current)
+
+
+func _hitbox_options(current: String) -> OptionButton:
+	return _options([["concave", "Concave"], ["convex", "Convex"]], current)
 
 
 # --- Triggers ---------------------------------------------------------------------------------

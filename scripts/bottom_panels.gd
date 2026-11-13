@@ -228,7 +228,7 @@ func _wave_room() -> String:
 	if meta is Dictionary and meta.has("room"):
 		return String(meta.room)
 	var doc: EditorDoc = app.doc
-	if doc.kind_of(doc.selected) == "room":
+	if doc.kind_of(doc.selected) == "area":
 		return doc.selected
 	return String(doc.enemy_slot(doc.selected).get("room", ""))
 

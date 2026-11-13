@@ -4,15 +4,21 @@ extends RefCounted
 ## and every change the editor can make to it. Views listen to `changed`
 ## and redraw from the data.
 ##
-## Kinds of item: "start", "room", "piece", "wall", "decoration" (Layer 1),
-## "object" (Layer 2) and "enemy" (Layer 3). Every item is found by its id.
+## Kinds of item: "start", "piece", "wall", "boundary", "decoration", "area"
+## (Layer 1), "object" (Layer 2) and "enemy" (Layer 3). Every item is found by
+## its id. Areas (rooms and corridors) aren't placed: they're the pieces of
+## the navmesh, found by update_nav() (LevelNav).
 
 signal changed
 signal selection_changed
+## The navmesh was baked again (and areas may have come or gone).
+signal nav_updated
 
 const START := "start"
-const MAP_LISTS := {"room": "rooms", "piece": "pieces", "wall": "walls", "decoration": "decorations"}
-const KIND_LAYER := {"start": 1, "room": 1, "piece": 1, "wall": 1, "decoration": 1, "object": 2, "enemy": 3}
+const MAP_LISTS := {"piece": "pieces", "wall": "walls", "boundary": "boundaries",
+	"decoration": "decorations", "area": "areas"}
+const KIND_LAYER := {"start": 1, "piece": 1, "wall": 1, "boundary": 1, "decoration": 1, "area": 1,
+	"object": 2, "enemy": 3}
 const UNDO_LIMIT := 100
 
 var level: LevelData
@@ -22,13 +28,17 @@ var _states: Array = []
 var _index := -1
 var _last_key := ""
 var _last_time := 0
+## The walkable navmesh (uncut) and the pieces of the boundary-cut one, each
+## with its "area" id: {"mesh": NavigationMesh, "islands": [...]}.
+var nav := {}
+var nav_stale := true
 
 
 # --- Opening and saving -----------------------------------------------------------------------
 
-static func create(level_name: String, size: String, area: String, dir: String) -> EditorDoc:
+static func create(level_name: String, area: String, dir: String) -> EditorDoc:
 	var doc := EditorDoc.new()
-	doc.level = LevelData.create(level_name, size, area)
+	doc.level = LevelData.create(level_name, area)
 	doc.level.dir = dir
 	doc._reset_history()
 	return doc
@@ -46,6 +56,7 @@ static func open(dir: String) -> EditorDoc:
 
 
 func save() -> Error:
+	update_nav()  # saves each area's navmesh polygons for the game
 	var err := level.save_dir(level.dir)
 	if err == OK:
 		dirty = false
@@ -82,6 +93,7 @@ func _reset_history() -> void:
 ## Call after changing the data. Edits with the same `key` made within a
 ## moment of each other (dragging a slider, typing) undo as one step.
 func commit(key := "") -> void:
+	nav_stale = true
 	normalize()
 	var now := Time.get_ticks_msec()
 	if key != "" and key == _last_key and now - _last_time < 1500 and _index > 0:
@@ -126,6 +138,7 @@ func _restore() -> void:
 	level.combat = s.combat.duplicate(true)
 	_last_key = ""
 	dirty = true
+	nav_stale = true
 	if selected != "" and kind_of(selected) == "":
 		selected = ""
 		selection_changed.emit()
@@ -140,14 +153,12 @@ func select(id: String) -> void:
 		selection_changed.emit()
 
 
-## Every item you can select: [{id, kind, data}]. Generated floor and wall
-## pieces belong to their room and aren't listed.
+## Every item you can select: [{id, kind, data}].
 func items() -> Array:
 	var out := [{"id": START, "kind": "start", "data": level.map.start}]
 	for kind in MAP_LISTS:
 		for d in level.map[MAP_LISTS[kind]]:
-			if not d.has("generated_for"):
-				out.append({"id": String(d.get("id", "")), "kind": kind, "data": d})
+			out.append({"id": String(d.get("id", "")), "kind": kind, "data": d})
 	for d in level.interaction.objects:
 		out.append({"id": String(d.get("id", "")), "kind": "object", "data": d})
 	for d in level.placements():
@@ -205,18 +216,76 @@ func new_id(prefix: String) -> String:
 	return "%s_%d" % [prefix, n]
 
 
-## The room or corridor whose footprint holds a point ("" if none).
+## The room or corridor (navmesh area) a point stands in ("" if none).
 ## `rooms_only` skips corridors.
 func room_at(point: Vector3, rooms_only := false) -> String:
-	for r in level.map.rooms:
-		if rooms_only and String(r.get("kind", "room")) != "room":
+	if nav_stale:
+		update_nav()
+	for a in level.map.areas:
+		if rooms_only and String(a.get("kind", "room")) != "room":
 			continue
-		var p := LevelData.vec3(r.get("pos"))
-		var s := LevelData.vec3(r.get("size"), Vector3(16, 6, 16))
-		if absf(point.x - p.x) <= s.x * 0.5 and absf(point.z - p.z) <= s.z * 0.5 \
-				and point.y >= p.y - 2.0 and point.y <= p.y + s.y + 2.0:
-			return String(r.get("id", ""))
+		if LevelData.area_contains(a, point):
+			return String(a.get("id", ""))
 	return ""
+
+
+## Bakes the navmesh again (if anything changed since the last bake) and
+## matches its pieces to the level's areas: new pieces become new rooms,
+## areas whose piece is gone are dropped. Not an undo step: it follows the
+## pieces, which are.
+func update_nav(force := false) -> void:
+	if not nav_stale and not force:
+		return
+	nav_stale = false
+	var parts := LevelNav.collect(level, model_loader())
+	var mesh := LevelNav.bake(level, Callable(), false, parts)
+	var cut := LevelNav.bake(level, Callable(), true, parts)
+	var before: int = level.map.areas.size()
+	var found := LevelNav.assign_areas(level, cut)
+	nav = {"mesh": mesh, "islands": found.islands, "added": found.added, "removed": found.removed}
+	if not found.added.is_empty() or not found.removed.is_empty() or before != level.map.areas.size():
+		if selected != "" and kind_of(selected) == "":
+			selected = ""
+			selection_changed.emit()
+	nav_updated.emit()
+
+
+## Loads imported models for the navmesh (glTF, cached).
+func model_loader() -> Callable:
+	return func(asset_id: String) -> Node3D: return Models.instance(level, asset_id)
+
+
+## Joins another area into this one (a room split by a pit or a low wall):
+## its pieces of navmesh count as this area, and whatever pointed at it now
+## points here. Its fight, if any, is dropped when this area has one.
+func join_areas(keep: String, other: String) -> void:
+	var a := level.find_area(keep)
+	var b := level.find_area(other)
+	if a.is_empty() or b.is_empty() or keep == other:
+		return
+	var also: Array = a.get("also", [])
+	also.append(b.get("seed"))
+	also.append_array(b.get("also", []))
+	a.also = also
+	var fight_b := level.combat_room(other)
+	if not fight_b.is_empty():
+		if level.combat_room(keep).is_empty():
+			fight_b.room = keep
+		else:
+			for w in fight_b.get("waves", []):
+				level.combat.free.append_array(w.get("enemies", []))
+			level.combat.rooms.erase(fight_b)
+	_erase_id(level.map.areas, other)
+	_repoint(other, keep)
+	nav_stale = true
+
+
+## Splits off the pieces this area took in with join_areas: they become
+## areas of their own again on the next bake.
+func split_area(id: String) -> void:
+	var a := level.find_area(id)
+	a.erase("also")
+	nav_stale = true
 
 
 # --- Adding, removing, renaming ---------------------------------------------------------------
@@ -227,7 +296,7 @@ func add(kind: String, data: Dictionary, wave := 0) -> String:
 	var d := data.duplicate(true)
 	d.id = new_id(Catalog.id_prefix(kind, d))
 	match kind:
-		"room", "piece", "wall", "decoration":
+		"piece", "wall", "boundary", "decoration":
 			level.map[MAP_LISTS[kind]].append(d)
 		"object":
 			level.interaction.objects.append(d)
@@ -240,18 +309,10 @@ func add(kind: String, data: Dictionary, wave := 0) -> String:
 func remove(id: String) -> void:
 	var kind := kind_of(id)
 	match kind:
-		"room", "piece", "wall", "decoration":
+		"area":
+			return  # areas come from the navmesh: split or remove floors instead
+		"piece", "wall", "boundary", "decoration":
 			_erase_id(level.map[MAP_LISTS[kind]], id)
-			if kind == "room":
-				var rooms := []
-				for c in level.combat.rooms:
-					if String(c.get("room", "")) != id:
-						rooms.append(c)
-					else:
-						# Its enemies stay where they stand, outside waves.
-						for w in c.get("waves", []):
-							level.combat.free.append_array(w.get("enemies", []))
-				level.combat.rooms = rooms
 		"object":
 			_erase_id(level.interaction.objects, id)
 			for g in level.interaction.button_groups:
@@ -264,13 +325,10 @@ func remove(id: String) -> void:
 
 func duplicate_item(id: String) -> String:
 	var it := item(id)
-	if it.is_empty() or it.kind == "start":
+	if it.is_empty() or it.kind == "start" or it.kind == "area":
 		return ""
 	var d: Dictionary = (it.data as Dictionary).duplicate(true)
-	var step := 4.0 if it.kind == "room" else 1.0
-	if it.kind == "room":
-		step = LevelData.vec3(d.get("size"), Vector3(16, 6, 16)).x
-		d.erase("name")
+	var step := maxf(Items.local_aabb(it.kind, d, level).size.x, 1.0)
 	Items.set_pos(it.kind, d, Items.get_pos(it.kind, d) + Vector3(step, 0, 0))
 	var slot := enemy_slot(id)
 	return add(it.kind, d, int(slot.get("wave", 0)))
@@ -306,9 +364,14 @@ func rename(old: String, new_id_text: String) -> String:
 	if d.is_empty():
 		return "Nothing is called \"%s\"." % old
 	d.id = id
-	for p in level.map.pieces:
-		if String(p.get("generated_for", "")) == old:
-			p.generated_for = id
+	_repoint(old, id)
+	if selected == old and not is_group:
+		selected = id
+	return ""
+
+
+## Points everything that mentioned `old` at `id` instead.
+func _repoint(old: String, id: String) -> void:
 	for o in level.interaction.objects:
 		for key in ["open_when_cleared", "shut_during_combat"]:
 			if String(o.get(key, "")) == old:
@@ -327,9 +390,6 @@ func rename(old: String, new_id_text: String) -> String:
 		for a in rule.get("do", []):
 			if String(a.get("target", "")) == old:
 				a.target = id
-	if selected == old and not is_group:
-		selected = id
-	return ""
 
 
 ## What else mentions an id, in plain words (shown before deleting).
@@ -398,7 +458,7 @@ func _take_enemy(id: String) -> Dictionary:
 
 
 func _insert_enemy(d: Dictionary, room: String, wave: int) -> void:
-	if room == "" or level.find_room(room).is_empty():
+	if room == "" or level.find_area(room).is_empty():
 		level.combat.free.append(d)
 		return
 	var c := level.combat_room(room)
@@ -488,10 +548,9 @@ func set_group(button_id: String, group_id: String) -> String:
 ## flag a trigger uses exists, and keeps zone triggers matched to whether
 ## the zone waits for the whole party.
 func normalize() -> void:
-	RoomBuilder.rebuild(level)
 	var fights := []
 	for c in level.combat.rooms:
-		if not (c.get("waves", []) as Array).is_empty() and not level.find_room(String(c.get("room", ""))).is_empty():
+		if not (c.get("waves", []) as Array).is_empty():
 			fights.append(c)
 	level.combat.rooms = fights
 	var groups := []
