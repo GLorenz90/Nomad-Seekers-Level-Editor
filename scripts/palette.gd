@@ -15,7 +15,7 @@ func _init() -> void:
 	custom_minimum_size.x = 230
 	var title := Label.new()
 	title.text = "Place"
-	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_font_size_override("font_size", 15)
 	add_child(title)
 	_search = LineEdit.new()
 	_search.placeholder_text = "Search..."

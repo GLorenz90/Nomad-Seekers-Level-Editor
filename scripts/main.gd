@@ -70,8 +70,16 @@ var _pending := {}
 var _flush_queued := false
 
 
+## The editor's text size (Godot's default is 16, too big for 1600 x 900).
+const FONT_SIZE := 13
+
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
+	# Every control, menu and dialog that doesn't set its own size uses this
+	# (themes pass down to every window, popups and dialogs included).
+	var theme := Theme.new()
+	theme.default_font_size = FONT_SIZE
+	get_tree().root.theme = theme
 	dialogs = Dialogs.new()
 	dialogs.app = self
 	add_child(dialogs)
@@ -105,9 +113,14 @@ func _build() -> void:
 	add_child(back)
 	move_child(back, 0)
 
+	# Two rows: menus, layers and the level's actions on top; the editing
+	# tools (handles, camera, picking, undo, snap) underneath.
 	var bar := HBoxContainer.new()
 	bar.add_theme_constant_override("separation", 6)
 	root.add_child(bar)
+	var tools := HBoxContainer.new()
+	tools.add_theme_constant_override("separation", 6)
+	root.add_child(tools)
 	_menu(bar, "File", [["New level...   Ctrl+N", func() -> void: dialogs.leave_level(dialogs.new_level)],
 		["Open...   Ctrl+O", func() -> void: dialogs.leave_level(dialogs.welcome)],
 		["Save   Ctrl+S", save_level], ["Check and export...   Ctrl+E", export_level], [],
@@ -156,34 +169,34 @@ func _build() -> void:
 		b.button_pressed = spec[0] == gizmo_mode
 		var m: int = spec[0]
 		b.pressed.connect(func() -> void: set_gizmo_mode(m))
-		bar.add_child(b)
+		tools.add_child(b)
 		_mode_buttons.append(b)
 	_space = Button.new()
 	_space.toggle_mode = true
 	_space.text = "Global"
 	_space.tooltip_text = "T: move and rotate along the world's axes (Global) or the piece's own axes (Local). Resizing always uses the piece's own axes."
 	_space.toggled.connect(func(on: bool) -> void: set_local(on))
-	bar.add_child(_space)
+	tools.add_child(_space)
 	_ortho = Button.new()
 	_ortho.toggle_mode = true
 	_ortho.text = "Perspective"
 	_ortho.tooltip_text = "O (or Numpad 5): switch the camera between perspective and orthographic."
 	_ortho.toggled.connect(func(on: bool) -> void: set_ortho(on))
-	bar.add_child(_ortho)
-	bar.add_child(VSeparator.new())
+	tools.add_child(_ortho)
+	tools.add_child(VSeparator.new())
 	_pick_rooms = Button.new()
 	_pick_rooms.text = "Click picks: Pieces"
 	_pick_rooms.toggle_mode = true
 	_pick_rooms.tooltip_text = "N: switch between picking pieces and picking rooms (the navmesh). Pick a room to name it, make it a corridor, or join it with another."
 	_pick_rooms.toggled.connect(func(on: bool) -> void: set_pick_rooms(on))
-	bar.add_child(_pick_rooms)
-	bar.add_child(VSeparator.new())
-	_undo = _tool(bar, "Undo", "Undo (Ctrl+Z)", func() -> void: doc.undo())
-	_redo = _tool(bar, "Redo", "Redo (Ctrl+Y)", func() -> void: doc.redo())
-	bar.add_child(VSeparator.new())
+	tools.add_child(_pick_rooms)
+	tools.add_child(VSeparator.new())
+	_undo = _tool(tools, "Undo", "Undo (Ctrl+Z)", func() -> void: doc.undo())
+	_redo = _tool(tools, "Redo", "Redo (Ctrl+Y)", func() -> void: doc.redo())
+	tools.add_child(VSeparator.new())
 	var snap_label := Label.new()
 	snap_label.text = "Snap"
-	bar.add_child(snap_label)
+	tools.add_child(snap_label)
 	var snap := OptionButton.new()
 	snap.tooltip_text = "How things line up when you move, place or resize them (rotation snaps to 15°). Hold Alt while dragging to turn snapping off for a moment."
 	for spec in [[4.0, "4 m"], [1.0, "1 m"], [0.5, "0.5 m"], [0.0, "Off"]]:
@@ -191,8 +204,7 @@ func _build() -> void:
 		snap.set_item_metadata(snap.item_count - 1, spec[0])
 	snap.select(2)
 	snap.item_selected.connect(func(index: int) -> void: snap_step = float(snap.get_item_metadata(index)))
-	bar.add_child(snap)
-	bar.add_child(VSeparator.new())
+	tools.add_child(snap)
 	_tool(bar, "Playtest", "Save and run this level in the game (F5).", playtest)
 	_tool(bar, "Check and export", "Check the level for problems, then export it (Ctrl+E).", export_level)
 	var spacer := Control.new()
@@ -205,7 +217,7 @@ func _build() -> void:
 	var empty_box := VBoxContainer.new()
 	var empty_label := Label.new()
 	empty_label.text = "No level open"
-	empty_label.add_theme_font_size_override("font_size", 24)
+	empty_label.add_theme_font_size_override("font_size", 20)
 	empty_box.add_child(empty_label)
 	_tool(empty_box, "New level...", "", dialogs.new_level)
 	_tool(empty_box, "Open a level...", "", dialogs.welcome)
@@ -234,7 +246,7 @@ func _build() -> void:
 	bottom.app = self
 	middle.add_child(bottom)
 	var right := VSplitContainer.new()
-	right.custom_minimum_size.x = 360
+	right.custom_minimum_size.x = 330
 	right_split.add_child(right)
 	outline = Outline.new()
 	outline.app = self

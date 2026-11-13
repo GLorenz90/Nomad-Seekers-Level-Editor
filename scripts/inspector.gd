@@ -163,7 +163,7 @@ func _fill_problems() -> void:
 func _title(text: String) -> void:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", 20)
+	label.add_theme_font_size_override("font_size", 17)
 	_box.add_child(label)
 
 
@@ -171,7 +171,7 @@ func _section(text: String) -> void:
 	_box.add_child(HSeparator.new())
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", 16)
+	label.add_theme_font_size_override("font_size", 14)
 	label.add_theme_color_override("font_color", Color(0.65, 0.85, 1.0))
 	_box.add_child(label)
 
