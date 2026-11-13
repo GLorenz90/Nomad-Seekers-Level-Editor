@@ -112,6 +112,28 @@ static func resizable(kind: String, d: Dictionary) -> bool:
 	return false
 
 
+## Whether the by-sides resize handles work (anything resizable that's a
+## plain box; a platform is placed by its stops, so it isn't).
+static func sides_resizable(kind: String, d: Dictionary) -> bool:
+	return resizable(kind, d) and not (kind == "object" and String(d.get("type", "")) == "platform")
+
+
+## Which of the item's own axes can be resized ([x, y, z]). A boundary is a
+## plane, so it has no thickness to pull.
+static func resize_axes(kind: String, _d: Dictionary) -> Array:
+	return [true, true, false] if kind == "boundary" else [true, true, true]
+
+
+## The item's box in metres in its own frame (turned, not scaled), relative
+## to where it's placed: what the by-sides handles slide.
+static func sized_box(kind: String, d: Dictionary, level: LevelData) -> AABB:
+	var box := local_aabb(kind, d, level)
+	if scaled(kind, d):
+		var sc := LevelData.vec3(d.get("scale"), Vector3.ONE)
+		return AABB(box.position * sc, box.size * sc)
+	return box
+
+
 ## True when the item's size is a "scale" on an imported model.
 static func scaled(kind: String, d: Dictionary) -> bool:
 	return kind == "piece" and not String(d.get("asset", "")).begins_with("builtin:")
@@ -127,8 +149,11 @@ static func get_size(kind: String, d: Dictionary, level: LevelData) -> Vector3:
 	return local_aabb(kind, d, level).size
 
 
+## Sizes are kept between 5 cm and 1 km a side.
+const MAX_SIZE := 1000.0
+
 static func set_size(kind: String, d: Dictionary, level: LevelData, size: Vector3) -> void:
-	size = Vector3(maxf(size.x, 0.05), maxf(size.y, 0.05), maxf(size.z, 0.05))
+	size = size.clamp(Vector3.ONE * 0.05, Vector3.ONE * MAX_SIZE)
 	if scaled(kind, d):
 		var base := Models.aabb(level, String(d.get("asset", ""))).size
 		var sc := Vector3(size.x / maxf(base.x, 0.001), size.y / maxf(base.y, 0.001), size.z / maxf(base.z, 0.001))

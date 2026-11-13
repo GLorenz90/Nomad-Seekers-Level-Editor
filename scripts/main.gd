@@ -10,14 +10,18 @@ extends Control
 const CONTROLS := """Looking around
   Right-drag: look around (hold it and W A S D to fly)          Wheel: zoom
   Middle-drag or Shift + right-drag: slide the view
-  Arrow keys: slide the view        T: top-down view
-  F: centre on the selection
+  Arrow keys: slide the view        F: centre on the selection
+  O (or Numpad 5): perspective / orthographic        Numpad 7: top-down view
 
 Building (like Godot)
   Click something in the Place list, then click in the view. Keep clicking to place more.
   R while placing: turn it a quarter turn.    Esc or right-click: stop placing
   Click: select        Drag: slide along the ground
   Q: select only    W: move handles    E: rotate handles    R: resize handles
+  T: move and rotate along the world's axes (Global) or the piece's own (Local)
+  R again: resize from the centre, or by sides (pull any face or corner;
+           the opposite face or corner stays put)
+  Move: drag an arrow along its axis, or a square to slide across that plane.
   Drag a handle to move, turn or resize along it. Hold Alt for no snapping.
   Page Up / Page Down: raise / lower by half a metre
   Ctrl + D: duplicate        Delete: remove
@@ -60,6 +64,8 @@ var _toast_until := 0
 var _nav_due := 0
 var _mode_buttons: Array[Button] = []
 var _pick_rooms: Button
+var _space: Button
+var _ortho: Button
 var _pending := {}
 var _flush_queued := false
 
@@ -110,12 +116,13 @@ func _build() -> void:
 		["Imported models...", func() -> void: _need_doc(dialogs.models)],
 		["Import a model...", func() -> void: _need_doc(dialogs.import_model)], [],
 		["Playtest in the game   F5", playtest]])
-	_view_menu = _menu(bar, "View", [["Top-down view   T", func() -> void: toggle_top()],
+	_view_menu = _menu(bar, "View", [["Top-down view   Numpad 7", func() -> void: toggle_top()],
 		["Show the other layers' things", func() -> void: _toggle_view_option(1)],
 		["Show trigger lines", func() -> void: _toggle_view_option(2)],
-		["Show the navmesh", func() -> void: _toggle_view_option(3)], [],
+		["Show the navmesh", func() -> void: _toggle_view_option(3)],
+		["Orthographic   O", func() -> void: set_ortho(not view.ortho)], [],
 		["Show the whole level", func() -> void: view.focus("")]])
-	for i in 4:
+	for i in 5:
 		_view_menu.set_item_as_checkable(i, true)
 	for i in [1, 2, 3]:
 		_view_menu.set_item_checked(i, true)
@@ -138,9 +145,9 @@ func _build() -> void:
 	bar.add_child(VSeparator.new())
 	var modes := ButtonGroup.new()
 	for spec in [[TransformGizmo.Mode.SELECT, "Select", "Q: click to select, no handles."],
-			[TransformGizmo.Mode.MOVE, "Move", "W: arrows to move along an axis; the yellow square slides along the ground."],
+			[TransformGizmo.Mode.MOVE, "Move", "W: arrows move it along an axis; the squares slide it across a plane."],
 			[TransformGizmo.Mode.ROTATE, "Rotate", "E: rings to turn it (snaps to 15°; hold Alt for free turning)."],
-			[TransformGizmo.Mode.SCALE, "Resize", "R: handles to resize along each side; the white middle cube resizes evenly."]]:
+			[TransformGizmo.Mode.SCALE, "Resize: centre", "R: resize handles. Press R again to switch between resizing from the centre and by sides (pull a face or a corner; the opposite one stays put)."]]:
 		var b := Button.new()
 		b.text = spec[1]
 		b.tooltip_text = spec[2]
@@ -151,6 +158,19 @@ func _build() -> void:
 		b.pressed.connect(func() -> void: set_gizmo_mode(m))
 		bar.add_child(b)
 		_mode_buttons.append(b)
+	_space = Button.new()
+	_space.toggle_mode = true
+	_space.text = "Global"
+	_space.tooltip_text = "T: move and rotate along the world's axes (Global) or the piece's own axes (Local). Resizing always uses the piece's own axes."
+	_space.toggled.connect(func(on: bool) -> void: set_local(on))
+	bar.add_child(_space)
+	_ortho = Button.new()
+	_ortho.toggle_mode = true
+	_ortho.text = "Perspective"
+	_ortho.tooltip_text = "O (or Numpad 5): switch the camera between perspective and orthographic."
+	_ortho.toggled.connect(func(on: bool) -> void: set_ortho(on))
+	bar.add_child(_ortho)
+	bar.add_child(VSeparator.new())
 	_pick_rooms = Button.new()
 	_pick_rooms.text = "Click picks: Pieces"
 	_pick_rooms.toggle_mode = true
@@ -621,10 +641,32 @@ func _update_nav() -> void:
 
 
 func set_gizmo_mode(m: int) -> void:
+	# Pressing Resize again switches between from-the-centre and by-sides.
+	if m == TransformGizmo.Mode.SCALE and gizmo_mode == TransformGizmo.Mode.SCALE:
+		view.gizmo.scale_sides = not view.gizmo.scale_sides
+		toast("Resize by sides: pull a face or a corner; the opposite one stays put." if view.gizmo.scale_sides
+			else "Resize from the centre.")
 	gizmo_mode = m
 	for i in _mode_buttons.size():
 		_mode_buttons[i].set_pressed_no_signal(i == m)
+	_mode_buttons[TransformGizmo.Mode.SCALE].text = "Resize: sides" if view.gizmo.scale_sides else "Resize: centre"
 	view.gizmo.mode = m
+	view.gizmo.refresh()
+
+
+## Move and rotate along the piece's own axes (true) or the world's.
+func set_local(on: bool) -> void:
+	view.gizmo.local = on
+	_space.set_pressed_no_signal(on)
+	_space.text = "Local" if on else "Global"
+	view.gizmo.refresh()
+
+
+func set_ortho(on: bool) -> void:
+	view.set_ortho(on)
+	_ortho.set_pressed_no_signal(on)
+	_ortho.text = "Orthographic" if on else "Perspective"
+	_view_menu.set_item_checked(4, on)
 	view.gizmo.refresh()
 
 
@@ -668,6 +710,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				handled = false
 	elif doc == null or key.echo:
 		handled = false
+	elif view.is_flying() and key.keycode in [KEY_W, KEY_A, KEY_S, KEY_D, KEY_Q, KEY_E]:
+		handled = true  # flying with the right mouse button: these move the camera
 	else:
 		match key.keycode:
 			KEY_1, KEY_2, KEY_3:
@@ -690,6 +734,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			KEY_F:
 				view.focus(doc.selected)
 			KEY_T:
+				set_local(not view.gizmo.local)
+			KEY_O, KEY_KP_5:
+				set_ortho(not view.ortho)
+			KEY_KP_7:
 				toggle_top()
 			KEY_PAGEUP:
 				raise_selected(0.5)
