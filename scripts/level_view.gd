@@ -30,6 +30,8 @@ var doc: EditorDoc
 var show_all_layers := true
 var show_wires := true
 var show_nav := true
+## Orthographic camera (the top view is always orthographic).
+var ortho := false
 ## Layer 1: clicks pick rooms (navmesh) instead of pieces.
 var pick_rooms := false
 var gizmo: TransformGizmo
@@ -119,6 +121,22 @@ func rebuild() -> void:
 		var node := ItemVisuals.build(it.kind, it.data, doc, mine, layer)
 		_items.add_child(node)
 		_nodes[it.id] = node
+	refresh_overlay()
+
+
+## Rebuilds one item's stand-in (while it's being resized), leaving the rest.
+func rebuild_item(id: String) -> void:
+	var it := doc.item(id)
+	var old: Node3D = _nodes.get(id)
+	if it.is_empty() or old == null:
+		rebuild()
+		return
+	var layer: int = app.layer
+	var node := ItemVisuals.build(it.kind, it.data, doc, EditorDoc.KIND_LAYER[it.kind] == layer, layer)
+	_items.add_child(node)
+	_items.move_child(node, old.get_index())
+	old.free()
+	_nodes[id] = node
 	refresh_overlay()
 
 
@@ -298,13 +316,27 @@ func _grid() -> MeshInstance3D:
 func _update_camera() -> void:
 	var pitch := deg_to_rad(-89.9) if _top else _pitch
 	var basis := Basis.from_euler(Vector3(pitch, _yaw, 0.0))
-	_camera.transform = Transform3D(basis, _target + basis.z * _dist)
-	_camera.projection = Camera3D.PROJECTION_ORTHOGONAL if _top else Camera3D.PROJECTION_PERSPECTIVE
-	_camera.size = _dist
+	var flat := _top or ortho
+	# Orthographic shows the same width as perspective would at this zoom;
+	# the camera sits well back so nothing between it and the level is cut off.
+	_camera.projection = Camera3D.PROJECTION_ORTHOGONAL if flat else Camera3D.PROJECTION_PERSPECTIVE
+	_camera.size = 2.0 * _dist * tan(deg_to_rad(_camera.fov) * 0.5)
+	_camera.transform = Transform3D(basis, _target + basis.z * (maxf(_dist, 600.0) if flat else _dist))
+
+
+## Right mouse held: W A S D fly the camera.
+func is_flying() -> bool:
+	return _orbiting
 
 
 func set_top_view(on: bool) -> void:
 	_top = on
+	_update_camera()
+
+
+## Orthographic (no perspective) from any angle.
+func set_ortho(on: bool) -> void:
+	ortho = on
 	_update_camera()
 
 
@@ -584,7 +616,7 @@ func _gui_input(event: InputEvent) -> void:
 			var node: Node3D = _nodes.get(doc.selected)
 			if node and not it.is_empty():
 				if Items.resizable(it.kind, it.data) and gizmo.mode == TransformGizmo.Mode.SCALE:
-					rebuild()
+					rebuild_item(doc.selected)
 				else:
 					node.transform = Items.xform(it.kind, it.data)
 					refresh_overlay()

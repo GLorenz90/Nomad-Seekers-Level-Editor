@@ -10,6 +10,13 @@ func _init() -> void:
 		app.toggle_top()
 	if OS.get_environment("SHOT_MODE") != "":
 		app.set_gizmo_mode(int(OS.get_environment("SHOT_MODE")))
+	if OS.get_environment("SHOT_SIDES") == "1":
+		app.set_gizmo_mode(TransformGizmo.Mode.SCALE)
+		app.set_gizmo_mode(TransformGizmo.Mode.SCALE)
+	if OS.get_environment("SHOT_LOCAL") == "1":
+		app.set_local(true)
+	if OS.get_environment("SHOT_ORTHO") == "1":
+		app.set_ortho(true)
 	if OS.get_environment("SHOT_DIST") != "":
 		app.view._dist = float(OS.get_environment("SHOT_DIST"))
 		app.view._update_camera()

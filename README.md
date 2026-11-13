@@ -66,16 +66,20 @@ it makes the level compliant. Its `BUILD_LOG.md` lists each step.
 
 ## Moving things (like Godot)
 
-| Key | Mode |
+| Key | What it does |
 |---|---|
 | Q | Select only |
-| W | Move: arrows along each axis; the yellow square slides along the ground |
+| W | Move: arrows along each axis, and squares that slide it across the XY, XZ or YZ plane |
 | E | Rotate: rings around each axis (snaps to 15°) |
-| R | Resize: handles along the item's own sides; the white middle cube resizes evenly |
+| R | Resize. Press R again to switch between the two styles (the button shows which). **From centre**: a handle per axis, and a white middle cube that resizes evenly. **By sides**: a handle on every face and corner. Pull a face and the opposite face stays put; pull a corner and the box scales toward it while the opposite corner stays put. |
+| T | Global / Local: move and rotate along the world's axes or the piece's own. Resizing always uses the piece's own axes. |
+| O (or Numpad 5) | Perspective / orthographic camera |
+| Numpad 7 | Top-down view |
 
 You can also click and drag a piece to slide it along the ground. Moving and resizing follow the
 **Snap** setting; hold **Alt** to turn snapping off. Look around with the right mouse button, and
-hold it while pressing W A S D to fly. Help > Controls lists everything.
+hold it while pressing W A S D to fly; while you're flying, W, A, S, D, Q and E only move the camera.
+Help > Controls lists everything.
 
 ## Export checks
 

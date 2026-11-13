@@ -35,6 +35,13 @@ func drag(from: Vector2, to: Vector2) -> void:
 		await mouse(from.lerp(to, k / 10.0))
 	await mouse(to, MOUSE_BUTTON_LEFT, false)
 
+func _point(g: TransformGizmo, handle: String) -> Vector3:
+	for p in g._points:
+		if p.handle == handle:
+			return p.pos
+	return Vector3.ZERO
+
+
 func _init() -> void:
 	app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
@@ -101,6 +108,97 @@ func _init() -> void:
 	# Undo goes back one handle drag at a time.
 	doc.undo()
 	check(is_equal_approx(LevelData.vec3(doc.find(id).size).x, 4.0), "undo takes back the resize")
+
+	# Local axes: the wall is turned 90°, so its own X points along world -Z.
+	var wd := doc.find(id)
+	var p0 := Items.get_pos("piece", wd)
+	app.set_local(true)
+	app.set_gizmo_mode(TransformGizmo.Mode.MOVE)
+	await process_frame
+	g._fit()
+	var gx: Transform3D = g.global_transform
+	var dir := gx.basis.x.normalized()
+	var arrow := gx * Vector3(0.8, 0, 0)
+	check(g.hit(screen(arrow)) == "x", "in Local, the X arrow follows the wall")
+	await drag(screen(arrow), screen(arrow + dir * 2.0))
+	var p1 := Items.get_pos("piece", wd)
+	check(p1.distance_to(p0 + Vector3(0, 0, -2)) < 0.01, "dragging it moves the wall along its own X (world -Z) (%s -> %s)" % [p0, p1])
+	app.set_local(false)
+
+	# Plane squares: the XZ square slides it across the ground.
+	await process_frame
+	g._fit()
+	gx = g.global_transform
+	var square := gx * Vector3(0.31, 0, 0.31)
+	check(g.hit(screen(square)) == "xz", "the XZ square is under the mouse (%s)" % g.hit(screen(square)))
+	await drag(screen(square), screen(square + Vector3(2, 0, 1)))
+	var p2 := Items.get_pos("piece", wd)
+	check(p2.distance_to(p1 + Vector3(2, 0, 1)) < 0.01, "dragging the XZ square moves it 2 m X and 1 m Z, not up (%s)" % p2)
+	# Look along X so the YZ square faces the camera.
+	var yaw_was: float = app.view._yaw
+	var pitch_was: float = app.view._pitch
+	app.view._yaw = deg_to_rad(80.0)
+	app.view._pitch = deg_to_rad(-15.0)
+	app.view._update_camera()
+	await process_frame
+	g._fit()
+	square = g.global_transform * Vector3(0, 0.31, 0.31)
+	check(g.hit(screen(square)) == "yz", "the YZ square is there too (%s)" % g.hit(screen(square)))
+	await drag(screen(square), screen(square + Vector3(0, 1, 0)))
+	wd = doc.find(id)
+	check(is_equal_approx(Items.get_pos("piece", wd).y, 1.0) and is_equal_approx(Items.get_pos("piece", wd).x, p2.x),
+		"dragging the YZ square lifts it without moving X (%s)" % Items.get_pos("piece", wd))
+	app.view._yaw = yaw_was
+	app.view._pitch = pitch_was
+	app.view._update_camera()
+	doc.undo()
+	wd = doc.find(id)
+
+	# Orthographic: the handles still work.
+	app.set_ortho(true)
+	await process_frame
+	check(app.view._camera.projection == Camera3D.PROJECTION_ORTHOGONAL, "O switches to orthographic")
+	g._fit()
+	gx = g.global_transform
+	arrow = gx * Vector3(0.8, 0, 0)
+	var before_o := Items.get_pos("piece", wd)
+	await drag(screen(arrow), screen(arrow + Vector3(1.5, 0, 0)))
+	wd = doc.find(id)
+	check(is_equal_approx(Items.get_pos("piece", wd).x - before_o.x, 1.5), "the X arrow works in orthographic too (%s -> %s)" % [before_o, Items.get_pos("piece", wd)])
+	app.set_ortho(false)
+	check(app.view._camera.projection == Camera3D.PROJECTION_PERSPECTIVE, "and back to perspective")
+
+	# Resize by sides: square the wall up first, then pull faces and a corner.
+	Items.set_rot("piece", wd, Vector3.ZERO)
+	doc.commit()
+	app.set_gizmo_mode(TransformGizmo.Mode.SCALE)  # into Resize (from the centre)
+	app.set_gizmo_mode(TransformGizmo.Mode.SCALE)  # again: switches to by-sides
+	await process_frame
+	check(g.scale_sides and g.sides_active(), "pressing Resize again switches to by-sides")
+	check(g._points.size() == 6 + 8, "a box gets 6 face and 8 corner handles (%d)" % g._points.size())
+	var start_pos := Items.get_pos("piece", wd)
+	var left_face := start_pos.x - 2.0
+	var face := _point(g, "f+x")
+	await drag(screen(face), screen(face + Vector3(2, 0, 0)))
+	var sz := LevelData.vec3(wd.size)
+	var pp := Items.get_pos("piece", wd)
+	check(is_equal_approx(sz.x, 6.0) and is_equal_approx(pp.x - sz.x / 2.0, left_face), "pulling the +X face out 2 m makes it 6 m wide; the -X face stays put (%s, %s)" % [sz, pp])
+	face = _point(g, "f-y")
+	await drag(screen(face), screen(face + Vector3(0, -1, 0)))
+	sz = LevelData.vec3(wd.size)
+	pp = Items.get_pos("piece", wd)
+	check(is_equal_approx(sz.y, 4.0) and is_equal_approx(pp.y, -1.0) and is_equal_approx(pp.y + sz.y, 3.0),
+		"pulling the bottom face down 1 m grows it downward; the top stays put (%s, %s)" % [sz, pp])
+	var lo := pp - Vector3(sz.x / 2.0, 0, sz.z / 2.0)
+	var corner := _point(g, "c+++")
+	var far := lo + (corner - lo) * 2.0
+	await drag(screen(corner), screen(far))
+	sz = LevelData.vec3(wd.size)
+	pp = Items.get_pos("piece", wd)
+	var lo2 := pp - Vector3(sz.x / 2.0, 0, sz.z / 2.0)
+	check(sz.x > 9.0 and sz.y > 6.0 and lo2.distance_to(lo) < 0.05, "pulling the corner scales it toward that corner; the opposite corner stays put (%s, %s)" % [sz, lo2])
+	app.set_gizmo_mode(TransformGizmo.Mode.SCALE)
+	check(not g.scale_sides, "pressing Resize once more goes back to from-the-centre")
 
 	# Placing from the palette: a floor, then a second one beside it, then a
 	# boundary between them. The rooms follow without anything else.
