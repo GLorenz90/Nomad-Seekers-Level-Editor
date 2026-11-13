@@ -43,7 +43,7 @@ static func to_folder(level: LevelData, dest: String) -> String:
 		wanted[String(a.get("file", "")).get_file()] = true
 		any_gltf = any_gltf or String(a.get("file", "")).to_lower().ends_with(".gltf")
 	for m in copy.map.materials:
-		for key in ["albedo", "normal"]:
+		for key in LevelData.MATERIAL_IMAGES:
 			if String(m.get(key, "")) != "":
 				wanted[String(m[key]).get_file()] = true
 	if not wanted.is_empty() and source != dest:

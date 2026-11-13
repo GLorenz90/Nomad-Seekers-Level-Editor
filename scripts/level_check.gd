@@ -10,6 +10,9 @@ extends RefCounted
 ## Each problem: {"level": "error" | "warning", "text", "id", "layer"}.
 ## `id` is what to select ("" for the level as a whole).
 
+const IMAGE_NAMES := {"albedo": "colour image", "normal": "normal map", "roughness_map": "roughness map",
+	"metallic_map": "metallic map", "ao_map": "occlusion map", "emission_map": "glow map", "height_map": "height map"}
+
 
 static func run(doc: EditorDoc) -> Array:
 	var out := []
@@ -177,13 +180,15 @@ static func _check_map(doc: EditorDoc, out: Array) -> void:
 	for m in level.map.get("materials", []):
 		var id := String(m.get("id", ""))
 		var shown := String(m.get("name", id))
-		for key in ["albedo", "normal"]:
+		for key in LevelData.MATERIAL_IMAGES:
 			var file := String(m.get(key, ""))
 			if file == "":
 				continue
 			if not FileAccess.file_exists(level.dir.path_join(file)):
-				_add(out, "error", "The %s image for the material \"%s\" is missing (%s). Pick it again in the material's settings." % [
-					"colour" if key == "albedo" else "normal map", shown, file], "", 1)
+				_add(out, "error", "The %s for the material \"%s\" is missing (%s). Pick it again in the material's settings." % [
+					IMAGE_NAMES.get(key, key), shown, file], "", 1)
+		if String(m.get("height_map", "")) != "" and String(m.get("mapping", "world")) != "uv":
+			_add(out, "warning", "The material \"%s\" has a height map, but height maps only show with Mapping: the model's own UVs." % shown, "", 1)
 	for p in level.map.pieces:
 		var mat := String(p.get("material", ""))
 		if mat != "" and level.find_material(mat).is_empty():

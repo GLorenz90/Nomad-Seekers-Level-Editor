@@ -47,7 +47,19 @@ it makes the level compliant. Its `BUILD_LOG.md` lists each step.
      to bring its textures along. Pick a material in the list, then click pieces to paint them
      (click again to take it off), or set **Material** in the inspector. Materials are mapped
      onto the world, so tiling stays even however you stretch a shape; **Tile** sets how many
-     metres one copy of the image covers.
+     metres one copy of the image covers. (A model's own materials keep the model's UVs instead.)
+
+     The material window has three tabs:
+     - **Colour**: colour image and tint, and transparency: **Cut-out** for leaves and fences,
+       **See-through** for glass and water. It's only visual; solid pieces still block the way.
+     - **Surface**: normal map, roughness, metallic and occlusion maps, each reading a channel
+       (a glTF packed image is occlusion red, roughness green, metallic blue), and a height map
+       (needs Mapping: the model's own UVs).
+     - **Glow**: a glow color, brightness and glow map.
+
+     Importing a model with "Also add its materials" brings all of these across.
+
+     ![The material window](docs/screenshots/material_window.png)
    - **Invisible**: Room boundary and Invisible wall (both drawn as faint boxes so you can see and
      grab them).
    - **Effects**: lights, fireflies, searchlights.

@@ -29,6 +29,28 @@ func make_model(path: String) -> void:
 	mat.resource_name = "Bark"
 	mat.albedo_texture = ImageTexture.create_from_image(img)
 	mat.roughness = 0.6
+	var orm := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	orm.fill(Color(1.0, 0.7, 0.2))
+	var orm_tex := ImageTexture.create_from_image(orm)
+	mat.roughness_texture = orm_tex
+	mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+	mat.metallic_texture = orm_tex
+	mat.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+	mat.metallic = 1.0
+	mat.roughness = 1.0
+	mat.ao_enabled = true
+	mat.ao_texture = orm_tex
+	mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+	mat.normal_enabled = true
+	var flat := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	flat.fill(Color(0.5, 0.5, 1.0))
+	mat.normal_texture = ImageTexture.create_from_image(flat)
+	mat.normal_scale = 1.5
+	mat.emission_enabled = true
+	mat.emission = Color(1, 0.4, 0)
+	mat.emission_energy_multiplier = 2.0
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	mat.alpha_scissor_threshold = 0.3
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(1, 2, 1)
 	var mi := MeshInstance3D.new()
@@ -85,6 +107,18 @@ func _init() -> void:
 	check(String(mat.get("albedo", "")) != "" and FileAccess.file_exists(dir.path_join(String(mat.get("albedo", "")))),
 		"with its image saved in the level's assets (%s)" % mat.get("albedo", ""))
 	check(mat.get("folder") == "Library Stump" and not mat.has("license"), "in a folder named after the model, with no license needed")
+	print("     imported material: ", mat)
+	check(mat.get("mapping") == "uv", "a model's material keeps the model's UVs")
+	check(mat.has("normal") and is_equal_approx(float(mat.get("normal_strength", 0)), 1.5), "its normal map and strength come along")
+	check(mat.has("roughness_map") and mat.has("metallic_map") and mat.get("roughness_channel") == "green" and mat.get("metallic_channel") == "blue",
+		"its roughness and metallic map, with their channels")
+	check(mat.get("roughness_map") == mat.get("metallic_map"), "  saved once when they share an image")
+	check(mat.has("ao_map") and mat.get("ao_channel") == "red", "its occlusion map")
+	check(mat.has("emission") and is_equal_approx(float(mat.get("emission_energy", 0)), 2.0), "its glow")
+	check(mat.get("transparency") == "cutout" and is_equal_approx(float(mat.get("alpha_cutoff", 0)), 0.3), "and its cut-out transparency")
+	var built := LevelMaterials.build(doc.level, String(mat.id))
+	check(built != null and built.roughness_texture != null and built.ao_enabled and built.emission_enabled
+		and built.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR and not built.uv1_triplanar, "and it all shows in the editor")
 	pal.refresh(true)
 	var lines := "\n".join(pal.outline_text())
 	check(lines.contains("Decorations\n  Rocks\n    Small\n      Library Stump"), "the Place list shows Decorations > Rocks > Small > the model")
@@ -232,6 +266,43 @@ func _init() -> void:
 		if shown != null and shown is ConfirmationDialog:
 			check(not (shown as ConfirmationDialog).get_ok_button().disabled, "  and OK works without one")
 	shown.queue_free()
+
+	# The material window: three tabs; saving keeps only settings in use.
+	app.dialogs.material_dialog(String(mat.id))
+	await settle()
+	var mdlg := app.dialogs._open as ConfirmationDialog
+	var tabs: TabContainer = mdlg.find_children("*", "TabContainer", true, false)[0] if mdlg else null
+	check(tabs != null and tabs.get_tab_count() == 3 and tabs.get_tab_title(0) == "Colour" and tabs.get_tab_title(1) == "Surface"
+		and tabs.get_tab_title(2) == "Glow", "the material window has Colour, Surface and Glow tabs")
+	if mdlg:
+		mdlg.confirmed.emit()
+	await settle()
+	var saved_mat := doc.level.find_material(String(mat.id))
+	check(saved_mat.get("roughness_channel") == "green" and saved_mat.get("ao_channel") == "red" and saved_mat.get("transparency") == "cutout"
+		and saved_mat.get("mapping") == "uv" and saved_mat.has("emission"), "saving it unchanged keeps every setting")
+	saved_mat.erase("ao_map")
+	saved_mat.erase("emission")
+	saved_mat.erase("emission_energy")
+	saved_mat.transparency = "none"
+	doc.commit()
+	app.dialogs.material_dialog(String(mat.id))
+	await settle()
+	(app.dialogs._open as ConfirmationDialog).confirmed.emit()
+	await settle()
+	saved_mat = doc.level.find_material(String(mat.id))
+	check(not saved_mat.has("ao_channel") and not saved_mat.has("emission") and not saved_mat.has("alpha_cutoff") and not saved_mat.has("transparency"),
+		"and settings for maps it doesn't use are left out of the file")
+	saved_mat.height_map = saved_mat.albedo
+	saved_mat.mapping = "world"
+	doc.commit()
+	check(texts(LevelCheck.run(doc)).contains("height maps only show"), "a height map on world mapping gets a warning")
+	saved_mat.erase("height_map")
+	saved_mat.ao_map = "assets/gone.png"
+	doc.commit()
+	check(texts(LevelCheck.run(doc)).contains("occlusion map for the material"), "a missing map is caught")
+	saved_mat.erase("ao_map")
+	saved_mat.mapping = "uv"
+	doc.commit()
 
 	# Deleting a material unpaints what wore it.
 	doc.remove_material(String(mat.id))

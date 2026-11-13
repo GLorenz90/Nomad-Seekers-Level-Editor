@@ -49,7 +49,7 @@ static func _label(text: String, dim := false, size := 0) -> Label:
 	return label
 
 
-static func _row(box: Container, text: String, editor: Control, tip := "") -> void:
+static func _row(box: Container, text: String, editor: Control, tip := "") -> HBoxContainer:
 	var row := HBoxContainer.new()
 	var label := Label.new()
 	label.text = text
@@ -61,6 +61,7 @@ static func _row(box: Container, text: String, editor: Control, tip := "") -> vo
 	editor.tooltip_text = tip
 	row.add_child(editor)
 	box.add_child(row)
+	return row
 
 
 static func _options(options: Array, current: Variant) -> OptionButton:
@@ -529,6 +530,8 @@ func extract_materials(model_path: String, model_id: String) -> Array:
 	if GLTFDocument.new().append_from_file(model_path, state) != OK:
 		return []
 	var assets := doc.level.dir.path_join("assets")
+	DirAccess.make_dir_recursive_absolute(assets)
+	var saved := {}  # texture -> level path, so a packed image is saved once
 	var out := []
 	var n := 0
 	for m in state.get_materials():
@@ -538,21 +541,53 @@ func extract_materials(model_path: String, model_id: String) -> Array:
 			continue
 		var label := base.resource_name if base.resource_name != "" else "%s %d" % [model_id.capitalize(), n]
 		var id := _unique_material_id(EditorDoc.slug(model_id + "_" + label))
-		var spec := {"id": id, "name": label, "folder": model_id.capitalize(),
-			"color": [snappedf(base.albedo_color.r, 0.001), snappedf(base.albedo_color.g, 0.001), snappedf(base.albedo_color.b, 0.001)],
-			"roughness": snappedf(base.roughness, 0.01), "metallic": snappedf(base.metallic, 0.01), "tile": 2.0}
-		for pair in [["albedo", base.albedo_texture], ["normal", base.normal_texture if base.normal_enabled else null]]:
-			var tex: Texture2D = pair[1]
+		# A model's textures are unwrapped onto its UVs, so they keep UV mapping.
+		var spec := {"id": id, "name": label, "folder": model_id.capitalize(), "mapping": "uv", "uv_repeat": 1.0, "tile": 2.0,
+			"color": _rgb(base.albedo_color), "roughness": snappedf(base.roughness, 0.01), "metallic": snappedf(base.metallic, 0.01)}
+		var maps := [["albedo", base.albedo_texture, ""],
+			["normal", base.normal_texture if base.normal_enabled else null, "_normal"],
+			["roughness_map", base.roughness_texture, "_rough"],
+			["metallic_map", base.metallic_texture, "_metal"],
+			["ao_map", base.ao_texture if base.ao_enabled else null, "_ao"],
+			["emission_map", base.emission_texture if base.emission_enabled else null, "_glow"],
+			["height_map", base.heightmap_texture if base.heightmap_enabled else null, "_height"]]
+		for entry in maps:
+			var tex: Texture2D = entry[1]
 			if tex == null:
 				continue
-			var image := tex.get_image()
-			if image == null or image.is_empty():
-				continue
-			if image.is_compressed():
-				image.decompress()
-			var file := "%s%s.png" % [id, "" if pair[0] == "albedo" else "_normal"]
-			if image.save_png(assets.path_join(file)) == OK:
-				spec[pair[0]] = "assets/" + file
+			if not saved.has(tex):
+				var image := tex.get_image()
+				if image == null or image.is_empty():
+					continue
+				if image.is_compressed():
+					image.decompress()
+				var file := "%s%s.png" % [id, entry[2]]
+				if image.save_png(assets.path_join(file)) != OK:
+					continue
+				saved[tex] = "assets/" + file
+			spec[entry[0]] = saved[tex]
+		if spec.has("normal"):
+			spec.normal_strength = snappedf(base.normal_scale, 0.01)
+		if spec.has("roughness_map"):
+			spec.roughness_channel = LevelMaterials.channel_name(base.roughness_texture_channel)
+		if spec.has("metallic_map"):
+			spec.metallic_channel = LevelMaterials.channel_name(base.metallic_texture_channel)
+		if spec.has("ao_map"):
+			spec.ao_channel = LevelMaterials.channel_name(base.ao_texture_channel)
+			spec.ao_strength = snappedf(base.ao_light_affect, 0.01) if base.ao_light_affect > 0.0 else 1.0
+		if spec.has("height_map"):
+			spec.height_scale = snappedf(base.heightmap_scale, 0.1)
+		if base.emission_enabled:
+			spec.emission = _rgb(base.emission)
+			spec.emission_energy = snappedf(base.emission_energy_multiplier, 0.01)
+		match base.transparency:
+			BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR, BaseMaterial3D.TRANSPARENCY_ALPHA_HASH:
+				spec.transparency = "cutout"
+				spec.alpha_cutoff = snappedf(base.alpha_scissor_threshold, 0.01)
+			BaseMaterial3D.TRANSPARENCY_ALPHA, BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS:
+				spec.transparency = "alpha"
+				if base.albedo_color.a < 1.0:
+					spec.opacity = snappedf(base.albedo_color.a, 0.01)
 		doc.level.map.materials.append(spec)
 		out.append(id)
 	return out
@@ -578,6 +613,8 @@ func import_material(folder := "") -> void:
 
 ## Edits a material (or makes one: id "", optionally from an image file).
 ## Images picked here are copied into the level's assets folder on OK.
+## Three tabs: Colour (image, tint, transparency), Surface (normal, roughness,
+## metallic, ambient occlusion, height) and Glow.
 func material_dialog(id := "", image_path := "", folder := "") -> void:
 	var doc := _doc()
 	var existing := doc.level.find_material(id) if id != "" else {}
@@ -586,65 +623,104 @@ func material_dialog(id := "", image_path := "", folder := "") -> void:
 		"color": [1, 1, 1], "roughness": 0.85, "metallic": 0.0, "tile": 2.0}
 	if existing.is_empty() and folder != "":
 		spec.folder = folder
-	var picked := {"albedo": image_path, "normal": ""}  # new files to copy in
+	var picked := {}  # new files to copy in, by image key
+	for key in LevelData.MATERIAL_IMAGES:
+		picked[key] = ""
+	picked.albedo = image_path
 	var dialog := ConfirmationDialog.new()
 	dialog.title = "Material" if existing.is_empty() else "Material: " + String(spec.get("name", id))
 	dialog.ok_button_text = "Add material" if existing.is_empty() else "Save"
 	var box := _vbox(dialog)
-	box.add_child(_label("A material paints shapes and models. Its images repeat every \"Tile size\" metres across the world, so it looks the same on a small step and a big floor.", true))
 	var name_edit := LineEdit.new()
 	name_edit.text = String(spec.get("name", ""))
 	_row(box, "Name", name_edit)
 	var folder_edit := _folder_field("material", String(spec.get("folder", "")))
 	_row(box, "Folder", folder_edit, "Optional. Use / for folders inside folders.")
-	var image_rows := {}
-	for key in ["albedo", "normal"]:
-		var row := HBoxContainer.new()
-		var shown := Label.new()
-		shown.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		shown.clip_text = true
-		var choose := Button.new()
-		choose.text = "Choose..."
-		var clear := Button.new()
-		clear.text = "None"
-		row.add_child(shown)
-		row.add_child(choose)
-		row.add_child(clear)
-		image_rows[key] = shown
-		var k: String = key
-		var refresh := func() -> void:
-			var file := String(picked[k]) if String(picked[k]) != "" else String(spec.get(k, ""))
-			shown.text = file.get_file() if file != "" else "(none)"
-		refresh.call()
-		choose.pressed.connect(func() -> void:
-			pick_file(FileDialog.FILE_MODE_OPEN_FILE, "Pick an image", PackedStringArray(["*.png,*.jpg,*.jpeg,*.webp ; Images"]),
-				func(path: String) -> void:
-					picked[k] = path
-					refresh.call()))
-		clear.pressed.connect(func() -> void:
-			picked[k] = ""
-			spec.erase(k)
-			refresh.call())
-		_row(box, "Colour image" if key == "albedo" else "Normal map", row,
-			"The material's picture (optional: without one it's a plain color)." if key == "albedo" else "Optional bumpiness image (a normal map).")
+	# Mapping.
+	var mapping := _options([["world", "Across the world (tiles evenly at any size)"], ["uv", "The model's own UVs"]], String(spec.get("mapping", "world")))
+	_row(box, "Mapping", mapping, "Across the world: images repeat every Tile size metres, so a material looks the same on a small step and a big floor. Best for shapes.\nThe model's own UVs: for a model's unwrapped textures, and needed for height maps.")
+	var tile := _spin_box(float(spec.get("tile", 2.0)), 0.1, 100.0, 0.1)
+	var tile_row := _row(box, "Tile size (m)", tile, "How many metres one copy of the images covers.")
+	var repeat := _spin_box(float(spec.get("uv_repeat", 1.0)), 0.01, 100.0, 0.05)
+	var repeat_row := _row(box, "Repeat", repeat, "How many times the images repeat across the model's UVs (1 for a model's own textures).")
+	var tabs := TabContainer.new()
+	tabs.custom_minimum_size = Vector2(0, 380)
+	box.add_child(tabs)
+
+	# Colour.
+	var colour := _tab(tabs, "Colour")
+	_row(colour, "Colour image", _image_row(spec, picked, "albedo"), "The material's picture (optional: without one it's a plain color).")
 	var tint := ColorPickerButton.new()
 	var c := LevelData.vec3(spec.get("color"), Vector3.ONE)
 	tint.color = Color(c.x, c.y, c.z)
+	tint.edit_alpha = false
 	tint.custom_minimum_size = Vector2(80, 0)
-	_row(box, "Color", tint, "Multiplied with the colour image, or the whole color without one.")
-	var tile := _spin_box(float(spec.get("tile", 2.0)), 0.1, 100.0, 0.1)
-	_row(box, "Tile size (m)", tile, "How many metres one copy of the image covers.")
-	var rough := _spin_box(float(spec.get("roughness", 0.85)), 0.0, 1.0, 0.05)
-	_row(box, "Roughness", rough, "0 is glossy, 1 is matte.")
-	var metal := _spin_box(float(spec.get("metallic", 0.0)), 0.0, 1.0, 0.05)
-	_row(box, "Metallic", metal)
+	_row(colour, "Color", tint, "Multiplied with the colour image, or the whole color without one.")
+	var see_through := _options([["none", "Solid"], ["cutout", "Cut-out (leaves, fences, grates)"], ["alpha", "See-through (glass, water, ghosts)"]],
+		String(spec.get("transparency", "none")))
+	_row(colour, "Transparency", see_through, "Uses the colour image's alpha (transparent parts).\nCut-out drops pixels below the cut-off and shows both sides; see-through blends them.")
+	var opacity := _spin_box(float(spec.get("opacity", 1.0)), 0.0, 1.0, 0.05)
+	var opacity_row := _row(colour, "Opacity", opacity, "How solid a see-through material is (1 is fully solid).")
+	var cutoff := _spin_box(float(spec.get("alpha_cutoff", 0.5)), 0.0, 1.0, 0.05)
+	var cutoff_row := _row(colour, "Cut-off", cutoff, "Pixels less solid than this are dropped.")
+	colour.add_child(_label("Solid pieces still block the way and carry the navmesh however see-through they look.", true))
+
+	# Surface.
+	var surface := _tab(tabs, "Surface")
+	surface.add_child(_label("Maps are optional. A glTF model packs occlusion, roughness and metallic into one image (red, green and blue): pick it for all three with those channels.", true))
+	_row(surface, "Normal map", _image_row(spec, picked, "normal"), "Bumpiness (a normal map).")
 	var strength := _spin_box(float(spec.get("normal_strength", 1.0)), 0.0, 4.0, 0.1)
-	_row(box, "Normal strength", strength)
+	_row(surface, "Normal strength", strength)
+	var rough := _spin_box(float(spec.get("roughness", 0.85)), 0.0, 1.0, 0.05)
+	var metal := _spin_box(float(spec.get("metallic", 0.0)), 0.0, 1.0, 0.05)
+	_row(surface, "Roughness map", _image_row(spec, picked, "roughness_map", func() -> void: rough.value = 1.0), "Where it's glossy (dark) or matte (light).")
+	var rough_channel := _channel_options(spec, "roughness_channel")
+	_row(surface, "  channel", rough_channel)
+	_row(surface, "Roughness", rough, "0 is glossy, 1 is matte. With a map, this multiplies it (leave it at 1).")
+	_row(surface, "Metallic map", _image_row(spec, picked, "metallic_map", func() -> void: metal.value = 1.0), "Where it's metal (light) or not (dark).")
+	var metal_channel := _channel_options(spec, "metallic_channel")
+	_row(surface, "  channel", metal_channel)
+	_row(surface, "Metallic", metal, "With a map, this multiplies it (leave it at 1).")
+	_row(surface, "Occlusion map", _image_row(spec, picked, "ao_map"), "Ambient occlusion: darkens creases and corners.")
+	var ao_channel := _channel_options(spec, "ao_channel")
+	_row(surface, "  channel", ao_channel)
+	var ao_strength := _spin_box(float(spec.get("ao_strength", 1.0)), 0.0, 1.0, 0.05)
+	_row(surface, "  strength", ao_strength)
+	_row(surface, "Height map", _image_row(spec, picked, "height_map"), "Fakes depth (parallax): light is high, dark is low.")
+	var height := _spin_box(float(spec.get("height_scale", 5.0)), 0.0, 16.0, 0.5)
+	_row(surface, "  depth", height)
+	var height_note := _label("Height maps only work with Mapping: the model's own UVs.", true)
+	surface.add_child(height_note)
+
+	# Glow.
+	var glow := _tab(tabs, "Glow")
+	glow.add_child(_label("Makes the material give off its own light (it doesn't light up things around it; use a Light effect for that).", true))
+	var glow_color := ColorPickerButton.new()
+	var g := LevelData.vec3(spec.get("emission"), Vector3.ZERO)
+	glow_color.color = Color(g.x, g.y, g.z)
+	glow_color.edit_alpha = false
+	glow_color.custom_minimum_size = Vector2(80, 0)
+	_row(glow, "Glow color", glow_color, "Black is no glow.")
+	_row(glow, "Glow map", _image_row(spec, picked, "emission_map"), "Which parts glow, in what colors. With a map and a black glow color, the map glows in its own colors.")
+	var energy := _spin_box(float(spec.get("emission_energy", 1.0)), 0.0, 16.0, 0.1)
+	_row(glow, "Brightness", energy)
+
+	var update := func() -> void:
+		var uv := String(mapping.get_selected_metadata()) == "uv"
+		tile_row.visible = not uv
+		repeat_row.visible = uv
+		height_note.visible = not uv
+		var mode := String(see_through.get_selected_metadata())
+		opacity_row.visible = mode == "alpha"
+		cutoff_row.visible = mode == "cutout"
+	update.call()
+	mapping.item_selected.connect(func(_i: int) -> void: update.call())
+	see_through.item_selected.connect(func(_i: int) -> void: update.call())
 	box.add_child(HSeparator.new())
 	box.add_child(_license_row())
 	dialog.confirmed.connect(func() -> void:
 		var problem := ""
-		for k in ["albedo", "normal"]:
+		for k in LevelData.MATERIAL_IMAGES:
 			if String(picked[k]) != "":
 				var copied := _copy_image(String(picked[k]))
 				if copied == "":
@@ -657,11 +733,23 @@ func material_dialog(id := "", image_path := "", folder := "") -> void:
 			return
 		spec.name = name_edit.text.strip_edges() if name_edit.text.strip_edges() != "" else "Material"
 		doc.set_folder(spec, _folder_text(folder_edit))
-		spec.color = [snappedf(tint.color.r, 0.001), snappedf(tint.color.g, 0.001), snappedf(tint.color.b, 0.001)]
-		spec.tile = tile.value
+		spec.color = _rgb(tint.color)
 		spec.roughness = rough.value
 		spec.metallic = metal.value
-		spec.normal_strength = strength.value
+		spec.tile = tile.value
+		var has := func(key: String) -> bool: return String(spec.get(key, "")) != ""
+		_keep(spec, String(mapping.get_selected_metadata()) == "uv", {"mapping": "uv", "uv_repeat": repeat.value})
+		var mode := String(see_through.get_selected_metadata())
+		_keep(spec, mode != "none", {"transparency": mode})
+		_keep(spec, mode == "alpha" and opacity.value < 1.0, {"opacity": opacity.value})
+		_keep(spec, mode == "cutout", {"alpha_cutoff": cutoff.value})
+		_keep(spec, has.call("normal"), {"normal_strength": strength.value})
+		_keep(spec, has.call("roughness_map"), {"roughness_channel": String(rough_channel.get_selected_metadata())})
+		_keep(spec, has.call("metallic_map"), {"metallic_channel": String(metal_channel.get_selected_metadata())})
+		_keep(spec, has.call("ao_map"), {"ao_channel": String(ao_channel.get_selected_metadata()), "ao_strength": ao_strength.value})
+		_keep(spec, has.call("height_map"), {"height_scale": height.value})
+		var glowing: bool = has.call("emission_map") or glow_color.color.get_luminance() > 0.0
+		_keep(spec, glowing, {"emission": _rgb(glow_color.color), "emission_energy": energy.value})
 		if existing.is_empty():
 			spec.id = _unique_material_id(EditorDoc.slug(String(spec.name)))
 			doc.level.map.materials.append(spec)
@@ -673,7 +761,72 @@ func material_dialog(id := "", image_path := "", folder := "") -> void:
 		dialog.queue_free()
 		app.toast("Saved the material \"%s\". Click it in the Place list, then click pieces to paint them." % spec.name))
 	dialog.canceled.connect(dialog.queue_free)
-	_show(dialog, Vector2i(620, 0))
+	_show(dialog, Vector2i(680, 0))
+
+
+## A tab page (a VBox) in a TabContainer.
+func _tab(tabs: TabContainer, title: String) -> VBoxContainer:
+	var scroll := ScrollContainer.new()
+	scroll.name = title
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var page := VBoxContainer.new()
+	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	page.add_theme_constant_override("separation", 6)
+	scroll.add_child(page)
+	tabs.add_child(scroll)
+	return page
+
+
+## "file.png  [Choose...] [None]" for one of a material's images. Choosing
+## a file calls on_pick (to nudge a setting that goes with it).
+func _image_row(spec: Dictionary, picked: Dictionary, key: String, on_pick := Callable()) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var shown := Label.new()
+	shown.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	shown.clip_text = true
+	shown.custom_minimum_size.x = 160
+	var choose := Button.new()
+	choose.text = "Choose..."
+	var clear := Button.new()
+	clear.text = "None"
+	row.add_child(shown)
+	row.add_child(choose)
+	row.add_child(clear)
+	var refresh := func() -> void:
+		var file := String(picked[key]) if String(picked[key]) != "" else String(spec.get(key, ""))
+		shown.text = file.get_file() if file != "" else "(none)"
+	refresh.call()
+	choose.pressed.connect(func() -> void:
+		pick_file(FileDialog.FILE_MODE_OPEN_FILE, "Pick an image", PackedStringArray(["*.png,*.jpg,*.jpeg,*.webp ; Images"]),
+			func(path: String) -> void:
+				picked[key] = path
+				if on_pick.is_valid():
+					on_pick.call()
+				refresh.call()))
+	clear.pressed.connect(func() -> void:
+		picked[key] = ""
+		spec.erase(key)
+		refresh.call())
+	return row
+
+
+func _channel_options(spec: Dictionary, key: String) -> OptionButton:
+	return _options([["gray", "Whole image (gray)"], ["red", "Red"], ["green", "Green"], ["blue", "Blue"], ["alpha", "Alpha"]],
+		String(spec.get(key, "gray")))
+
+
+## Sets `values` on spec when `wanted`, else takes those keys out (so unused
+## settings don't clutter the level file).
+static func _keep(spec: Dictionary, wanted: bool, values: Dictionary) -> void:
+	for k in values:
+		if wanted:
+			spec[k] = values[k]
+		else:
+			spec.erase(k)
+
+
+static func _rgb(c: Color) -> Array:
+	return [snappedf(c.r, 0.001), snappedf(c.g, 0.001), snappedf(c.b, 0.001)]
 
 
 ## Copies an image into the level's assets folder; returns its level path.

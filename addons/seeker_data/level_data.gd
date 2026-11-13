@@ -77,6 +77,8 @@ const STEPS_MAX := 64
 const ASSET_CATEGORIES := ["decoration", "prefab"]
 const MODEL_FILES := ["glb", "gltf"]
 const TEXTURE_FILES := ["png", "jpg", "jpeg", "webp"]
+## The image keys of a material (map.materials; see LevelMaterials).
+const MATERIAL_IMAGES := ["albedo", "normal", "roughness_map", "metallic_map", "ao_map", "emission_map", "height_map"]
 ## Built-in effects (lights and particles), kept in map.decorations.
 const BUILTIN_DECOR := ["builtin:fireflies", "builtin:light", "builtin:searchlight"]
 
@@ -451,9 +453,16 @@ func validate(known_enemies: PackedStringArray = PackedStringArray()) -> PackedS
 			out.append("Asset %s: its file must be a .glb or .gltf inside the level folder." % a.get("id", "?"))
 	for m in map.materials:
 		var mid := String(m.get("id", "?"))
-		for key in ["albedo", "normal"]:
+		for key in MATERIAL_IMAGES:
 			if String(m.get(key, "")) != "" and not safe_file(String(m[key]), TEXTURE_FILES):
 				out.append("Material %s: its %s image must be a .png, .jpg or .webp inside the level folder." % [mid, key])
+		if not LevelMaterials.MAPPINGS.has(String(m.get("mapping", "world"))):
+			out.append("Material %s: mapping must be world or uv." % mid)
+		if not LevelMaterials.TRANSPARENCY.has(String(m.get("transparency", "none"))):
+			out.append("Material %s: transparency must be none, alpha or cutout." % mid)
+		for key in ["roughness_channel", "metallic_channel", "ao_channel"]:
+			if m.has(key) and not LevelMaterials.CHANNELS.has(String(m[key])):
+				out.append("Material %s: %s must be red, green, blue, alpha or gray." % [mid, key])
 	for p in map.pieces:
 		var asset := String(p.get("asset", ""))
 		if asset.begins_with("builtin:"):
