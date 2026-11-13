@@ -50,6 +50,8 @@ var _body: Control
 var _empty: Control
 var _view_menu: PopupMenu
 var _toast_until := 0
+var _pending := {}
+var _flush_queued := false
 
 
 func _ready() -> void:
@@ -59,7 +61,13 @@ func _ready() -> void:
 	add_child(dialogs)
 	_build()
 	_refresh_all()
-	if DisplayServer.get_name() != "headless":
+	var open_dir := ""
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--open="):
+			open_dir = arg.trim_prefix("--open=")
+	if open_dir != "":
+		open_path.call_deferred(open_dir)
+	elif DisplayServer.get_name() != "headless":
 		dialogs.welcome.call_deferred()
 
 
@@ -101,6 +109,7 @@ func _build() -> void:
 	_view_menu.set_item_checked(1, true)
 	_view_menu.set_item_checked(2, true)
 	_menu(bar, "Help", [["Controls", func() -> void: dialogs.tell("Controls", CONTROLS)],
+		["Open the starter example", func() -> void: dialogs.leave_level(open_example)],
 		["About layers", func() -> void: dialogs.tell("The three layers", "\n\n".join(Catalog.LAYER_HELP.values()))]])
 	bar.add_child(VSeparator.new())
 	var group := ButtonGroup.new()
@@ -266,6 +275,25 @@ func open_path(path: String) -> void:
 	set_doc(opened)
 
 
+const EXAMPLE := "res://examples/starter_large"
+
+## Opens the user's own copy of the bundled example (made on first use).
+func open_example() -> void:
+	var dest := AppSettings.library_dir().path_join("Starter - Mossy Ruins")
+	if not FileAccess.file_exists(dest.path_join("level.json")):
+		DirAccess.make_dir_recursive_absolute(dest)
+		for file in DirAccess.get_files_at(EXAMPLE):
+			if file.ends_with(".json"):
+				var text := FileAccess.get_file_as_string(EXAMPLE.path_join(file))
+				var f := FileAccess.open(dest.path_join(file), FileAccess.WRITE)
+				if f == null:
+					dialogs.tell("Couldn't copy the example", "The example couldn't be written to %s." % dest)
+					return
+				f.store_string(text)
+				f.close()
+	open_path(dest)
+
+
 func save_level() -> void:
 	if doc == null:
 		return
@@ -288,34 +316,70 @@ func settings_changed() -> void:
 
 func _on_changed() -> void:
 	problems = LevelCheck.run(doc)
-	view.rebuild()
-	inspector.on_changed()
-	outline.refresh()
-	bottom.refresh()
-	_refresh_bars()
+	# Note now whether the change came from the inspector or dialogue editor
+	# (so they keep focus while typing); the redraw itself waits for the end
+	# of the frame, so no panel is rebuilt while one of its own controls is
+	# still sending the signal that caused it. Godot crashes (or blocks the
+	# Tree, leaving it empty) when that happens.
+	if inspector._own_change and inspector._shown == doc.selected:
+		inspector._fill_problems()
+	else:
+		_pending["inspector"] = true
+	if not bottom._talk_own:
+		_pending["dialogue"] = true
+	for what in ["view", "outline", "bottom", "bars"]:
+		_pending[what] = true
 	if layer == 1:
-		palette.refresh()  # imported models may have changed
+		_pending["palette"] = true  # imported models may have changed
+	_schedule()
 
 
 func _on_selection() -> void:
-	view.refresh_overlay()
-	inspector.rebuild()
-	outline.refresh()
+	for what in ["overlay", "inspector", "outline"]:
+		_pending[what] = true
+	_schedule()
 
 
+## Redraw everything (used when a level is opened).
 func _refresh_all() -> void:
 	_empty.visible = doc == null
 	_body.visible = doc != null
+	if doc != null:
+		problems = LevelCheck.run(doc)
+		for what in ["view", "palette", "outline", "inspector", "bottom", "dialogue"]:
+			_pending[what] = true
+	_pending["bars"] = true
+	_schedule()
+
+
+func _schedule() -> void:
+	if not _flush_queued:
+		_flush_queued = true
+		_flush.call_deferred()
+
+
+## Does the queued redraws, once each, after the current signal has finished.
+func _flush() -> void:
+	_flush_queued = false
+	var todo := _pending
+	_pending = {}
 	if doc == null:
 		_refresh_bars()
 		return
-	problems = LevelCheck.run(doc)
-	view.rebuild()
-	palette.refresh()
-	outline.refresh()
-	inspector.rebuild()
-	bottom.refresh()
-	_refresh_bars()
+	if todo.has("view"):
+		view.rebuild()
+	elif todo.has("overlay"):
+		view.refresh_overlay()
+	if todo.has("palette"):
+		palette.refresh()
+	if todo.has("outline"):
+		outline.refresh()
+	if todo.has("inspector"):
+		inspector.rebuild()
+	if todo.has("bottom"):
+		bottom.refresh(todo.has("dialogue"))
+	if todo.has("bars"):
+		_refresh_bars()
 
 
 func _refresh_bars() -> void:
@@ -351,10 +415,9 @@ func set_layer(n: int) -> void:
 	var kind := doc.kind_of(doc.selected)
 	if kind != "" and EditorDoc.KIND_LAYER[kind] != layer and not (kind == "room" and layer == 3):
 		doc.select("")
-	view.rebuild()
-	palette.refresh()
-	outline.refresh()
-	inspector.rebuild()
+	for what in ["view", "palette", "outline", "inspector"]:
+		_pending[what] = true
+	_schedule()
 	_set_hint("")
 
 

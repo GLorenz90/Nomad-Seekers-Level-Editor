@@ -1,0 +1,3259 @@
+{
+	"assets": [],
+	"decorations": [
+		{
+			"amount": 24,
+			"asset": "builtin:fireflies",
+			"id": "fireflies_1",
+			"pos": [
+				72.0,
+				0.0,
+				48.0
+			],
+			"size": [
+				6,
+				3,
+				6
+			]
+		},
+		{
+			"amount": 24,
+			"asset": "builtin:fireflies",
+			"id": "fireflies_2",
+			"pos": [
+				104.0,
+				0.0,
+				48.0
+			],
+			"size": [
+				6,
+				3,
+				6
+			]
+		},
+		{
+			"asset": "builtin:light",
+			"color": [
+				1,
+				0.85,
+				0.6
+			],
+			"energy": 1.5,
+			"id": "light_1",
+			"pos": [
+				0.0,
+				3.0,
+				0.0
+			],
+			"range": 12
+		},
+		{
+			"asset": "builtin:light",
+			"color": [
+				1,
+				0.85,
+				0.6
+			],
+			"energy": 1.5,
+			"id": "light_2",
+			"pos": [
+				48.0,
+				3.0,
+				0.0
+			],
+			"range": 12
+		},
+		{
+			"asset": "builtin:light",
+			"color": [
+				1,
+				0.85,
+				0.6
+			],
+			"energy": 1.5,
+			"id": "light_3",
+			"pos": [
+				152.0,
+				3.0,
+				0.0
+			],
+			"range": 12
+		},
+		{
+			"asset": "builtin:light",
+			"color": [
+				1,
+				0.85,
+				0.6
+			],
+			"energy": 1.5,
+			"id": "light_4",
+			"pos": [
+				212.0,
+				3.0,
+				0.0
+			],
+			"range": 12
+		}
+	],
+	"grid": 4.0,
+	"lighting": {
+		"ambient_energy": 1.0,
+		"exposure": 1.0,
+		"fog_density": 0.0,
+		"preset": "day",
+		"sun_energy": 1.0
+	},
+	"pieces": [
+		{
+			"asset": "builtin:cylinder",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.4,
+				0.36
+			],
+			"id": "pillar_1",
+			"pos": [
+				80.0,
+				0.0,
+				42.0
+			],
+			"size": [
+				2.5,
+				3,
+				2.5
+			]
+		},
+		{
+			"asset": "builtin:cylinder",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.4,
+				0.36
+			],
+			"id": "pillar_2",
+			"pos": [
+				80.0,
+				0.0,
+				54.0
+			],
+			"size": [
+				2.5,
+				3,
+				2.5
+			]
+		},
+		{
+			"asset": "builtin:cylinder",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.4,
+				0.36
+			],
+			"id": "pillar_3",
+			"pos": [
+				96.0,
+				0.0,
+				44.0
+			],
+			"size": [
+				2.5,
+				3,
+				2.5
+			]
+		},
+		{
+			"asset": "builtin:cylinder",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.4,
+				0.36
+			],
+			"id": "pillar_4",
+			"pos": [
+				96.0,
+				0.0,
+				52.0
+			],
+			"size": [
+				2.5,
+				3,
+				2.5
+			]
+		},
+		{
+			"asset": "builtin:cylinder",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.4,
+				0.36
+			],
+			"id": "pillar_5",
+			"pos": [
+				88.0,
+				0.0,
+				48.0
+			],
+			"size": [
+				2.5,
+				3,
+				2.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "bridge_room",
+			"id": "auto_bridge_room_1",
+			"pos": [
+				104.0,
+				-1.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "bridge_room",
+			"id": "auto_bridge_room_2",
+			"pos": [
+				104.0,
+				0.0,
+				-8.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "bridge_room",
+			"id": "auto_bridge_room_3",
+			"pos": [
+				98.875,
+				0.0,
+				8.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "bridge_room",
+			"id": "auto_bridge_room_4",
+			"pos": [
+				109.125,
+				0.0,
+				8.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "bridge_room",
+			"id": "auto_bridge_room_5",
+			"pos": [
+				96.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				16.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "bridge_room",
+			"id": "auto_bridge_room_6",
+			"pos": [
+				112.0,
+				0.0,
+				-5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "bridge_room",
+			"id": "auto_bridge_room_7",
+			"pos": [
+				112.0,
+				0.0,
+				5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.36,
+				0.5,
+				0.3
+			],
+			"generated_for": "plains_west",
+			"id": "auto_plains_west_1",
+			"pos": [
+				72.0,
+				-1.0,
+				48.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "plains_west",
+			"id": "auto_plains_west_2",
+			"pos": [
+				72.0,
+				0.0,
+				40.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "plains_west",
+			"id": "auto_plains_west_3",
+			"pos": [
+				72.0,
+				0.0,
+				56.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "plains_west",
+			"id": "auto_plains_west_4",
+			"pos": [
+				64.0,
+				0.0,
+				42.875
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "plains_west",
+			"id": "auto_plains_west_5",
+			"pos": [
+				64.0,
+				0.0,
+				53.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "plains_west",
+			"id": "auto_plains_west_6",
+			"pos": [
+				80.0,
+				0.0,
+				39.875
+			],
+			"size": [
+				0.5,
+				4.0,
+				0.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "plains_west",
+			"id": "auto_plains_west_7",
+			"pos": [
+				80.0,
+				0.0,
+				56.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				0.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "side_vault",
+			"id": "auto_side_vault_1",
+			"pos": [
+				152.0,
+				-1.0,
+				-16.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "side_vault",
+			"id": "auto_side_vault_2",
+			"pos": [
+				152.0,
+				0.0,
+				-24.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "side_vault",
+			"id": "auto_side_vault_3",
+			"pos": [
+				146.875,
+				0.0,
+				-8.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "side_vault",
+			"id": "auto_side_vault_4",
+			"pos": [
+				157.125,
+				0.0,
+				-8.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "side_vault",
+			"id": "auto_side_vault_5",
+			"pos": [
+				144.0,
+				0.0,
+				-16.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				16.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "side_vault",
+			"id": "auto_side_vault_6",
+			"pos": [
+				160.0,
+				0.0,
+				-16.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				16.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "ruin_hall",
+			"id": "auto_ruin_hall_1",
+			"pos": [
+				48.0,
+				-1.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "ruin_hall",
+			"id": "auto_ruin_hall_2",
+			"pos": [
+				48.0,
+				0.0,
+				-8.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "ruin_hall",
+			"id": "auto_ruin_hall_3",
+			"pos": [
+				42.875,
+				0.0,
+				8.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "ruin_hall",
+			"id": "auto_ruin_hall_4",
+			"pos": [
+				53.125,
+				0.0,
+				8.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "ruin_hall",
+			"id": "auto_ruin_hall_5",
+			"pos": [
+				40.0,
+				0.0,
+				-5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "ruin_hall",
+			"id": "auto_ruin_hall_6",
+			"pos": [
+				40.0,
+				0.0,
+				5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "ruin_hall",
+			"id": "auto_ruin_hall_7",
+			"pos": [
+				56.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				16.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "drone_hall",
+			"id": "auto_drone_hall_1",
+			"pos": [
+				176.0,
+				-1.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "drone_hall",
+			"id": "auto_drone_hall_2",
+			"pos": [
+				176.0,
+				0.0,
+				-8.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "drone_hall",
+			"id": "auto_drone_hall_3",
+			"pos": [
+				176.0,
+				0.0,
+				8.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "drone_hall",
+			"id": "auto_drone_hall_4",
+			"pos": [
+				168.0,
+				0.0,
+				-5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "drone_hall",
+			"id": "auto_drone_hall_5",
+			"pos": [
+				168.0,
+				0.0,
+				5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "drone_hall",
+			"id": "auto_drone_hall_6",
+			"pos": [
+				184.0,
+				0.0,
+				-5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "drone_hall",
+			"id": "auto_drone_hall_7",
+			"pos": [
+				184.0,
+				0.0,
+				5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "start_room",
+			"id": "auto_start_room_1",
+			"pos": [
+				0.0,
+				-1.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "start_room",
+			"id": "auto_start_room_2",
+			"pos": [
+				0.0,
+				0.0,
+				-8.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "start_room",
+			"id": "auto_start_room_3",
+			"pos": [
+				0.0,
+				0.0,
+				8.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "start_room",
+			"id": "auto_start_room_4",
+			"pos": [
+				-8.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				16.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "start_room",
+			"id": "auto_start_room_5",
+			"pos": [
+				8.0,
+				0.0,
+				-5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "start_room",
+			"id": "auto_start_room_6",
+			"pos": [
+				8.0,
+				0.0,
+				5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "boss_arena",
+			"id": "auto_boss_arena_1",
+			"pos": [
+				212.0,
+				-1.0,
+				0.0
+			],
+			"size": [
+				24.0,
+				1.0,
+				24.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "boss_arena",
+			"id": "auto_boss_arena_2",
+			"pos": [
+				212.0,
+				0.0,
+				-12.0
+			],
+			"size": [
+				24.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "boss_arena",
+			"id": "auto_boss_arena_3",
+			"pos": [
+				212.0,
+				0.0,
+				12.0
+			],
+			"size": [
+				24.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "boss_arena",
+			"id": "auto_boss_arena_4",
+			"pos": [
+				200.0,
+				0.0,
+				-7.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				10.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "boss_arena",
+			"id": "auto_boss_arena_5",
+			"pos": [
+				200.0,
+				0.0,
+				7.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				10.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "boss_arena",
+			"id": "auto_boss_arena_6",
+			"pos": [
+				224.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				24.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.36,
+				0.5,
+				0.3
+			],
+			"generated_for": "plains_east",
+			"id": "auto_plains_east_1",
+			"pos": [
+				104.0,
+				-1.0,
+				48.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "plains_east",
+			"id": "auto_plains_east_2",
+			"pos": [
+				98.875,
+				0.0,
+				40.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "plains_east",
+			"id": "auto_plains_east_3",
+			"pos": [
+				109.125,
+				0.0,
+				40.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "plains_east",
+			"id": "auto_plains_east_4",
+			"pos": [
+				104.0,
+				0.0,
+				56.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "plains_east",
+			"id": "auto_plains_east_5",
+			"pos": [
+				96.0,
+				0.0,
+				39.875
+			],
+			"size": [
+				0.5,
+				4.0,
+				0.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "plains_east",
+			"id": "auto_plains_east_6",
+			"pos": [
+				96.0,
+				0.0,
+				56.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				0.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "plains_east",
+			"id": "auto_plains_east_7",
+			"pos": [
+				112.0,
+				0.0,
+				48.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				16.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "ooze_cellar",
+			"id": "auto_ooze_cellar_1",
+			"pos": [
+				48.0,
+				-1.0,
+				48.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "ooze_cellar",
+			"id": "auto_ooze_cellar_2",
+			"pos": [
+				42.875,
+				0.0,
+				40.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "ooze_cellar",
+			"id": "auto_ooze_cellar_3",
+			"pos": [
+				53.125,
+				0.0,
+				40.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "ooze_cellar",
+			"id": "auto_ooze_cellar_4",
+			"pos": [
+				48.0,
+				0.0,
+				56.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "ooze_cellar",
+			"id": "auto_ooze_cellar_5",
+			"pos": [
+				40.0,
+				0.0,
+				48.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				16.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "ooze_cellar",
+			"id": "auto_ooze_cellar_6",
+			"pos": [
+				56.0,
+				0.0,
+				42.875
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "ooze_cellar",
+			"id": "auto_ooze_cellar_7",
+			"pos": [
+				56.0,
+				0.0,
+				53.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "watch_post",
+			"id": "auto_watch_post_1",
+			"pos": [
+				104.0,
+				-1.0,
+				32.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "watch_post",
+			"id": "auto_watch_post_2",
+			"pos": [
+				98.875,
+				0.0,
+				24.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "watch_post",
+			"id": "auto_watch_post_3",
+			"pos": [
+				109.125,
+				0.0,
+				24.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "watch_post",
+			"id": "auto_watch_post_4",
+			"pos": [
+				96.0,
+				0.0,
+				31.75
+			],
+			"size": [
+				0.5,
+				4.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "watch_post",
+			"id": "auto_watch_post_5",
+			"pos": [
+				96.0,
+				0.0,
+				40.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				0.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "watch_post",
+			"id": "auto_watch_post_6",
+			"pos": [
+				112.0,
+				0.0,
+				31.75
+			],
+			"size": [
+				0.5,
+				4.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "crawler_pit",
+			"id": "auto_crawler_pit_1",
+			"pos": [
+				48.0,
+				-1.0,
+				24.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "crawler_pit",
+			"id": "auto_crawler_pit_2",
+			"pos": [
+				42.875,
+				0.0,
+				16.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "crawler_pit",
+			"id": "auto_crawler_pit_3",
+			"pos": [
+				53.125,
+				0.0,
+				16.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "crawler_pit",
+			"id": "auto_crawler_pit_4",
+			"pos": [
+				42.875,
+				0.0,
+				32.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "crawler_pit",
+			"id": "auto_crawler_pit_5",
+			"pos": [
+				53.125,
+				0.0,
+				32.0
+			],
+			"size": [
+				6.25,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "crawler_pit",
+			"id": "auto_crawler_pit_6",
+			"pos": [
+				40.0,
+				0.0,
+				24.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				16.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "crawler_pit",
+			"id": "auto_crawler_pit_7",
+			"pos": [
+				56.0,
+				0.0,
+				24.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				16.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "hound_den",
+			"id": "auto_hound_den_1",
+			"pos": [
+				24.0,
+				-1.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hound_den",
+			"id": "auto_hound_den_2",
+			"pos": [
+				24.0,
+				0.0,
+				-8.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hound_den",
+			"id": "auto_hound_den_3",
+			"pos": [
+				24.0,
+				0.0,
+				8.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hound_den",
+			"id": "auto_hound_den_4",
+			"pos": [
+				16.0,
+				0.0,
+				-5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hound_den",
+			"id": "auto_hound_den_5",
+			"pos": [
+				16.0,
+				0.0,
+				5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hound_den",
+			"id": "auto_hound_den_6",
+			"pos": [
+				32.0,
+				0.0,
+				-5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hound_den",
+			"id": "auto_hound_den_7",
+			"pos": [
+				32.0,
+				0.0,
+				5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "junction",
+			"id": "auto_junction_1",
+			"pos": [
+				152.0,
+				-1.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "junction",
+			"id": "auto_junction_2",
+			"pos": [
+				152.0,
+				0.0,
+				8.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "junction",
+			"id": "auto_junction_3",
+			"pos": [
+				144.0,
+				0.0,
+				-4.875
+			],
+			"size": [
+				0.5,
+				4.0,
+				5.75
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "junction",
+			"id": "auto_junction_4",
+			"pos": [
+				144.0,
+				0.0,
+				5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "junction",
+			"id": "auto_junction_5",
+			"pos": [
+				160.0,
+				0.0,
+				-4.875
+			],
+			"size": [
+				0.5,
+				4.0,
+				5.75
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "junction",
+			"id": "auto_junction_6",
+			"pos": [
+				160.0,
+				0.0,
+				5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.36,
+				0.5,
+				0.3
+			],
+			"generated_for": "plains_mid",
+			"id": "auto_plains_mid_1",
+			"pos": [
+				88.0,
+				-1.0,
+				48.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "plains_mid",
+			"id": "auto_plains_mid_2",
+			"pos": [
+				88.0,
+				0.0,
+				40.0
+			],
+			"size": [
+				15.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "plains_mid",
+			"id": "auto_plains_mid_3",
+			"pos": [
+				88.0,
+				0.0,
+				56.0
+			],
+			"size": [
+				15.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "lift_room",
+			"id": "auto_lift_room_1",
+			"pos": [
+				128.0,
+				-1.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "lift_room",
+			"id": "auto_lift_room_2",
+			"pos": [
+				128.0,
+				0.0,
+				-8.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "lift_room",
+			"id": "auto_lift_room_3",
+			"pos": [
+				128.0,
+				0.0,
+				8.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "lift_room",
+			"id": "auto_lift_room_4",
+			"pos": [
+				120.0,
+				0.0,
+				-5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "lift_room",
+			"id": "auto_lift_room_5",
+			"pos": [
+				120.0,
+				0.0,
+				5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "lift_room",
+			"id": "auto_lift_room_6",
+			"pos": [
+				136.0,
+				0.0,
+				-5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "lift_room",
+			"id": "auto_lift_room_7",
+			"pos": [
+				136.0,
+				0.0,
+				5.125
+			],
+			"size": [
+				0.5,
+				4.0,
+				6.25
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "hall_1",
+			"id": "auto_hall_1_1",
+			"pos": [
+				12.0,
+				-1.0,
+				0.0
+			],
+			"size": [
+				8.0,
+				1.0,
+				4.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_1",
+			"id": "auto_hall_1_2",
+			"pos": [
+				12.0,
+				0.0,
+				-2.0
+			],
+			"size": [
+				8.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_1",
+			"id": "auto_hall_1_3",
+			"pos": [
+				12.0,
+				0.0,
+				2.0
+			],
+			"size": [
+				8.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "hall_2",
+			"id": "auto_hall_2_1",
+			"pos": [
+				36.0,
+				-1.0,
+				0.0
+			],
+			"size": [
+				8.0,
+				1.0,
+				4.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_2",
+			"id": "auto_hall_2_2",
+			"pos": [
+				36.0,
+				0.0,
+				-2.0
+			],
+			"size": [
+				8.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_2",
+			"id": "auto_hall_2_3",
+			"pos": [
+				36.0,
+				0.0,
+				2.0
+			],
+			"size": [
+				8.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "hall_3",
+			"id": "auto_hall_3_1",
+			"pos": [
+				48.0,
+				-1.0,
+				12.0
+			],
+			"size": [
+				4.0,
+				1.0,
+				8.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_3",
+			"id": "auto_hall_3_2",
+			"pos": [
+				46.0,
+				0.0,
+				12.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				8.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_3",
+			"id": "auto_hall_3_3",
+			"pos": [
+				50.0,
+				0.0,
+				12.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				8.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "hall_4",
+			"id": "auto_hall_4_1",
+			"pos": [
+				48.0,
+				-1.0,
+				36.0
+			],
+			"size": [
+				4.0,
+				1.0,
+				8.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_4",
+			"id": "auto_hall_4_2",
+			"pos": [
+				46.0,
+				0.0,
+				36.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				8.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_4",
+			"id": "auto_hall_4_3",
+			"pos": [
+				50.0,
+				0.0,
+				36.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				8.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "hall_5",
+			"id": "auto_hall_5_1",
+			"pos": [
+				60.0,
+				-1.0,
+				48.0
+			],
+			"size": [
+				8.0,
+				1.0,
+				4.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_5",
+			"id": "auto_hall_5_2",
+			"pos": [
+				60.0,
+				0.0,
+				46.0
+			],
+			"size": [
+				8.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_5",
+			"id": "auto_hall_5_3",
+			"pos": [
+				60.0,
+				0.0,
+				50.0
+			],
+			"size": [
+				8.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "hall_6",
+			"id": "auto_hall_6_1",
+			"pos": [
+				104.0,
+				-1.0,
+				16.0
+			],
+			"size": [
+				4.0,
+				1.0,
+				16.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_6",
+			"id": "auto_hall_6_2",
+			"pos": [
+				102.0,
+				0.0,
+				16.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				16.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_6",
+			"id": "auto_hall_6_3",
+			"pos": [
+				106.0,
+				0.0,
+				16.0
+			],
+			"size": [
+				0.5,
+				4.0,
+				16.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "hall_7",
+			"id": "auto_hall_7_1",
+			"pos": [
+				116.0,
+				-1.0,
+				0.0
+			],
+			"size": [
+				8.0,
+				1.0,
+				4.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_7",
+			"id": "auto_hall_7_2",
+			"pos": [
+				116.0,
+				0.0,
+				-2.0
+			],
+			"size": [
+				8.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_7",
+			"id": "auto_hall_7_3",
+			"pos": [
+				116.0,
+				0.0,
+				2.0
+			],
+			"size": [
+				8.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "hall_8",
+			"id": "auto_hall_8_1",
+			"pos": [
+				140.0,
+				-1.0,
+				0.0
+			],
+			"size": [
+				8.0,
+				1.0,
+				4.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_8",
+			"id": "auto_hall_8_2",
+			"pos": [
+				140.0,
+				0.0,
+				-2.0
+			],
+			"size": [
+				8.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_8",
+			"id": "auto_hall_8_3",
+			"pos": [
+				140.0,
+				0.0,
+				2.0
+			],
+			"size": [
+				8.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "hall_9",
+			"id": "auto_hall_9_1",
+			"pos": [
+				164.0,
+				-1.0,
+				0.0
+			],
+			"size": [
+				8.0,
+				1.0,
+				4.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_9",
+			"id": "auto_hall_9_2",
+			"pos": [
+				164.0,
+				0.0,
+				-2.0
+			],
+			"size": [
+				8.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_9",
+			"id": "auto_hall_9_3",
+			"pos": [
+				164.0,
+				0.0,
+				2.0
+			],
+			"size": [
+				8.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.42,
+				0.45,
+				0.4
+			],
+			"generated_for": "hall_10",
+			"id": "auto_hall_10_1",
+			"pos": [
+				192.0,
+				-1.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				1.0,
+				4.0
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_10",
+			"id": "auto_hall_10_2",
+			"pos": [
+				192.0,
+				0.0,
+				-2.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		},
+		{
+			"asset": "builtin:box",
+			"collision": "box",
+			"color": [
+				0.5,
+				0.5,
+				0.56
+			],
+			"generated_for": "hall_10",
+			"id": "auto_hall_10_3",
+			"pos": [
+				192.0,
+				0.0,
+				2.0
+			],
+			"size": [
+				16.5,
+				4.0,
+				0.5
+			]
+		}
+	],
+	"rooms": [
+		{
+			"auto_build": true,
+			"id": "bridge_room",
+			"kind": "room",
+			"pos": [
+				104.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				6.0,
+				16.0
+			]
+		},
+		{
+			"auto_build": true,
+			"floor_color": [
+				0.36,
+				0.5,
+				0.3
+			],
+			"id": "plains_west",
+			"joins": "open",
+			"kind": "room",
+			"pos": [
+				72.0,
+				0.0,
+				48.0
+			],
+			"size": [
+				16.0,
+				6.0,
+				16.0
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "side_vault",
+			"kind": "room",
+			"pos": [
+				152.0,
+				0.0,
+				-16.0
+			],
+			"size": [
+				16.0,
+				6.0,
+				16.0
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "ruin_hall",
+			"kind": "room",
+			"pos": [
+				48.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				6.0,
+				16.0
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "drone_hall",
+			"kind": "room",
+			"pos": [
+				176.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				6.0,
+				16.0
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "start_room",
+			"kind": "room",
+			"pos": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				6.0,
+				16.0
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "boss_arena",
+			"kind": "room",
+			"pos": [
+				212.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				24.0,
+				6.0,
+				24.0
+			]
+		},
+		{
+			"auto_build": true,
+			"floor_color": [
+				0.36,
+				0.5,
+				0.3
+			],
+			"id": "plains_east",
+			"joins": "open",
+			"kind": "room",
+			"pos": [
+				104.0,
+				0.0,
+				48.0
+			],
+			"size": [
+				16.0,
+				6.0,
+				16.0
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "ooze_cellar",
+			"kind": "room",
+			"pos": [
+				48.0,
+				0.0,
+				48.0
+			],
+			"size": [
+				16.0,
+				6.0,
+				16.0
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "watch_post",
+			"kind": "room",
+			"pos": [
+				104.0,
+				0.0,
+				32.0
+			],
+			"size": [
+				16.0,
+				6.0,
+				16.0
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "crawler_pit",
+			"kind": "room",
+			"pos": [
+				48.0,
+				0.0,
+				24.0
+			],
+			"size": [
+				16.0,
+				6.0,
+				16.0
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "hound_den",
+			"kind": "room",
+			"pos": [
+				24.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				6.0,
+				16.0
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "junction",
+			"kind": "room",
+			"pos": [
+				152.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				6.0,
+				16.0
+			]
+		},
+		{
+			"auto_build": true,
+			"floor_color": [
+				0.36,
+				0.5,
+				0.3
+			],
+			"id": "plains_mid",
+			"joins": "open",
+			"kind": "room",
+			"pos": [
+				88.0,
+				0.0,
+				48.0
+			],
+			"size": [
+				16.0,
+				6.0,
+				16.0
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "lift_room",
+			"kind": "room",
+			"pos": [
+				128.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				16.0,
+				6.0,
+				16.0
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "hall_1",
+			"kind": "corridor",
+			"pos": [
+				12.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				8,
+				6,
+				4
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "hall_2",
+			"kind": "corridor",
+			"pos": [
+				36.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				8,
+				6,
+				4
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "hall_3",
+			"kind": "corridor",
+			"pos": [
+				48.0,
+				0.0,
+				12.0
+			],
+			"size": [
+				4,
+				6,
+				8
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "hall_4",
+			"kind": "corridor",
+			"pos": [
+				48.0,
+				0.0,
+				36.0
+			],
+			"size": [
+				4,
+				6,
+				8
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "hall_5",
+			"kind": "corridor",
+			"pos": [
+				60.0,
+				0.0,
+				48.0
+			],
+			"size": [
+				8,
+				6,
+				4
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "hall_6",
+			"kind": "corridor",
+			"pos": [
+				104.0,
+				0.0,
+				16.0
+			],
+			"size": [
+				4,
+				6,
+				16
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "hall_7",
+			"kind": "corridor",
+			"pos": [
+				116.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				8,
+				6,
+				4
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "hall_8",
+			"kind": "corridor",
+			"pos": [
+				140.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				8,
+				6,
+				4
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "hall_9",
+			"kind": "corridor",
+			"pos": [
+				164.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				8,
+				6,
+				4
+			]
+		},
+		{
+			"auto_build": true,
+			"id": "hall_10",
+			"kind": "corridor",
+			"pos": [
+				192.0,
+				0.0,
+				0.0
+			],
+			"size": [
+				16,
+				6,
+				4
+			]
+		}
+	],
+	"start": {
+		"pos": [
+			0,
+			0,
+			0
+		],
+		"yaw": 0
+	},
+	"walls": []
+}

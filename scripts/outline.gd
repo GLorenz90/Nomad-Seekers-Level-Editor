@@ -9,6 +9,7 @@ var _filling := false
 
 func _init() -> void:
 	hide_root = true
+	allow_search = false  # letters are editor shortcuts (R, F, T, 1-3), not "jump to row"
 	custom_minimum_size.y = 200
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	item_selected.connect(func() -> void:
@@ -32,9 +33,10 @@ func refresh() -> void:
 	for p in app.problems:
 		if p.level == "error" or not bad.has(p.id):
 			bad[p.id] = p.level
-	for it in doc.items():
-		if EditorDoc.KIND_LAYER[it.kind] != app.layer:
-			continue
+	var shown := doc.items().filter(func(it: Dictionary) -> bool: return EditorDoc.KIND_LAYER[it.kind] == app.layer)
+	shown.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return String(a.id).naturalnocasecmp_to(String(b.id)) < 0)
+	for it in shown:
 		var group: String = Catalog.type_name(it.kind, it.data) if it.kind in ["object", "room", "enemy"] else {
 			"start": "Start", "piece": "Solid shapes", "wall": "Invisible walls", "decoration": "Decorations"}.get(it.kind, it.kind)
 		if not groups.has(group):
@@ -51,7 +53,7 @@ func refresh() -> void:
 			row.set_tooltip_text(0, "Has a problem: see the Problems tab.")
 		if it.id == doc.selected:
 			row.select(0)
-			scroll_to_item.call_deferred(row)
+			scroll_to_item(row)
 	for group in groups:
 		var head: TreeItem = groups[group]
 		head.set_text(0, "%s (%d)" % [group, head.get_child_count()])

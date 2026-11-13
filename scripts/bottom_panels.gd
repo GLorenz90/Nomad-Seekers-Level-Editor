@@ -17,6 +17,7 @@ func _init() -> void:
 	custom_minimum_size.y = 210
 	# Problems
 	_problems = ItemList.new()
+	_problems.allow_search = false
 	_problems.name = "Problems"
 	_problems.item_selected.connect(func(index: int) -> void: app.go_to_problem(_problems.get_item_metadata(index)))
 	add_child(_problems)
@@ -34,6 +35,7 @@ func _init() -> void:
 			app.doc.commit()))
 	rules_tab.add_child(bar)
 	_rules = ItemList.new()
+	_rules.allow_search = false
 	_rules.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_rules.item_activated.connect(func(_index: int) -> void: _edit_rule())
 	rules_tab.add_child(_rules)
@@ -57,6 +59,7 @@ func _init() -> void:
 			app.toast("New enemies placed in that room will join wave %d." % (int(meta.wave) + 1))))
 	waves_tab.add_child(wave_bar)
 	_waves = Tree.new()
+	_waves.allow_search = false
 	_waves.hide_root = true
 	_waves.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_waves.item_selected.connect(func() -> void:
@@ -85,6 +88,7 @@ func _init() -> void:
 			app.doc.commit()))
 	left.add_child(talk_bar)
 	_talk_list = ItemList.new()
+	_talk_list.allow_search = false
 	_talk_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_talk_list.item_selected.connect(func(index: int) -> void:
 		_talk_id = String(_talk_list.get_item_metadata(index))
@@ -129,7 +133,7 @@ func select_rule(id: String) -> void:
 			_rules.ensure_current_is_visible()
 
 
-func refresh() -> void:
+func refresh(fill_dialogue := true) -> void:
 	var doc: EditorDoc = app.doc
 	if doc == null:
 		return
@@ -166,7 +170,7 @@ func refresh() -> void:
 		if String(d.id) == _talk_id:
 			_talk_list.select(index)
 	set_tab_title(3, "Dialogues (%d)" % _talk_list.item_count)
-	if not _talk_own:
+	if fill_dialogue and not _talk_own:
 		_fill_dialogue()
 
 

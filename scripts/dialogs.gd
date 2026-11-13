@@ -162,6 +162,13 @@ func welcome() -> void:
 		dialog.queue_free()
 		open_level())
 	buttons.add_child(open_button)
+	var example_button := Button.new()
+	example_button.text = "Open the starter example"
+	example_button.tooltip_text = "A finished 15-room level to look around and pull apart. You get your own copy, so change anything."
+	example_button.pressed.connect(func() -> void:
+		dialog.queue_free()
+		app.open_example())
+	buttons.add_child(example_button)
 	box.add_child(buttons)
 	var levels := library_levels()
 	if not levels.is_empty():

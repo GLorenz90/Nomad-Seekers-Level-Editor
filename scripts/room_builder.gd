@@ -27,7 +27,27 @@ static func sides(room: Dictionary) -> Array:
 	]
 
 
-## Doorways between rooms that touch: [{pos: Vector3, yaw: float, width, a, b}].
+## How two touching rooms meet: "wall" (no opening), "doorway" (up to
+## DOOR_WIDTH) or "open" (the whole shared edge). The stricter choice wins.
+static func join_mode(a: Dictionary, b: Dictionary) -> String:
+	var modes := [String(a.get("joins", "doorway")), String(b.get("joins", "doorway"))]
+	if "wall" in modes:
+		return "wall"
+	if "doorway" in modes:
+		return "doorway"
+	return "open"
+
+
+## True when Seekers can walk from one room straight into the other.
+static func joined(a: Dictionary, b: Dictionary) -> bool:
+	if overlapping(a, b):
+		return true
+	return touching(a, b) and join_mode(a, b) != "wall" \
+		and absf(LevelData.vec3(a.get("pos")).y - LevelData.vec3(b.get("pos")).y) <= 1.0
+
+
+## Openings between rooms that touch: [{pos: Vector3, yaw: float, width, a, b, open}].
+## "open" is true for a fully open edge (no door can go there).
 static func doorways(level: LevelData) -> Array:
 	var out := []
 	var rooms: Array = level.map.rooms
@@ -37,6 +57,9 @@ static func doorways(level: LevelData) -> Array:
 			var yb := float(LevelData.vec3(rooms[j].get("pos")).y)
 			if absf(ya - yb) > 1.0:
 				continue
+			var mode := join_mode(rooms[i], rooms[j])
+			if mode == "wall":
+				continue
 			for sa in sides(rooms[i]):
 				for sb in sides(rooms[j]):
 					if sa.axis != sb.axis or absf(float(sa.at) - float(sb.at)) > EPS:
@@ -45,12 +68,12 @@ static func doorways(level: LevelData) -> Array:
 					var hi := minf(float(sa.to), float(sb.to))
 					if hi - lo < 1.0:
 						continue
-					var width := minf(hi - lo, DOOR_WIDTH)
+					var width := hi - lo if mode == "open" else minf(hi - lo, DOOR_WIDTH)
 					var mid := (lo + hi) * 0.5
 					var pos := Vector3(mid, ya, float(sa.at)) if sa.axis == "x" else Vector3(float(sa.at), ya, mid)
 					out.append({"pos": pos, "yaw": 0.0 if sa.axis == "x" else 90.0, "width": width,
 						"axis": sa.axis, "at": float(sa.at), "from": mid - width * 0.5, "to": mid + width * 0.5,
-						"a": String(rooms[i].get("id", "")), "b": String(rooms[j].get("id", ""))})
+						"a": String(rooms[i].get("id", "")), "b": String(rooms[j].get("id", "")), "open": mode == "open"})
 	return out
 
 

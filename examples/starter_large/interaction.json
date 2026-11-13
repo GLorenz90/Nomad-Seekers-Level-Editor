@@ -1,0 +1,352 @@
+{
+	"button_groups": [],
+	"dialogues": [
+		{
+			"id": "ruin_warning",
+			"lines": [
+				{
+					"speaker": "Nomad-2",
+					"text": "Movement in the ruins. Something has been nesting here."
+				},
+				{
+					"speaker": "Nomad-2",
+					"text": "Clear it out and the way south opens."
+				}
+			]
+		}
+	],
+	"flags": {},
+	"objects": [
+		{
+			"id": "door_1",
+			"label": "LOCKED",
+			"pos": [
+				8.0,
+				0.0,
+				0.0
+			],
+			"start": "closed",
+			"type": "door",
+			"yaw": 90.0
+		},
+		{
+			"id": "plate_1",
+			"mode": "floor",
+			"pos": [
+				0.0,
+				0.0,
+				4.0
+			],
+			"type": "button"
+		},
+		{
+			"destination": "hub",
+			"dormant": true,
+			"id": "teleporter_1",
+			"label": "Back to Nomad-2",
+			"pos": [
+				212.0,
+				0.0,
+				6.0
+			],
+			"type": "teleporter"
+		},
+		{
+			"id": "depot_1",
+			"pos": [
+				-5.0,
+				0.0,
+				-5.0
+			],
+			"type": "lumidium_depot"
+		},
+		{
+			"id": "door_2",
+			"label": "LOCKED",
+			"open_when_cleared": "hound_den",
+			"pos": [
+				40.0,
+				0.0,
+				0.0
+			],
+			"start": "closed",
+			"type": "door",
+			"yaw": 90.0
+		},
+		{
+			"id": "door_3",
+			"label": "LOCKED",
+			"open_when_cleared": "ruin_hall",
+			"pos": [
+				48.0,
+				0.0,
+				8.0
+			],
+			"start": "closed",
+			"type": "door"
+		},
+		{
+			"id": "door_4",
+			"label": "LOCKED",
+			"open_when_cleared": "ooze_cellar",
+			"pos": [
+				56.0,
+				0.0,
+				48.0
+			],
+			"start": "closed",
+			"type": "door",
+			"yaw": 90.0
+		},
+		{
+			"id": "zone_1",
+			"once": true,
+			"pos": [
+				48.0,
+				0.0,
+				-2.0
+			],
+			"size": [
+				8,
+				3,
+				4
+			],
+			"type": "trigger_zone"
+		},
+		{
+			"contents": "random",
+			"id": "box_1",
+			"pos": [
+				42.0,
+				0.0,
+				28.0
+			],
+			"type": "box"
+		},
+		{
+			"color": "fire",
+			"id": "crystal_1",
+			"pos": [
+				54.0,
+				0.0,
+				52.0
+			],
+			"type": "lumidium_node",
+			"yield": 3
+		},
+		{
+			"active": true,
+			"id": "mist_1",
+			"kind": "poison_mist",
+			"pos": [
+				88.0,
+				0.0,
+				48.0
+			],
+			"type": "hazard",
+			"zones": [
+				{
+					"pos": [
+						88,
+						0,
+						48
+					],
+					"size": [
+						12,
+						4,
+						12
+					]
+				}
+			]
+		},
+		{
+			"id": "button_1",
+			"label": "Vent",
+			"mode": "press",
+			"pos": [
+				70.0,
+				0.0,
+				42.0
+			],
+			"type": "button"
+		},
+		{
+			"extended": false,
+			"id": "bridge_1",
+			"length": 8,
+			"pos": [
+				104.0,
+				0.0,
+				4.0
+			],
+			"type": "bridge",
+			"width": 4,
+			"yaw": 90.0
+		},
+		{
+			"id": "platform_1",
+			"mode": "ping_pong",
+			"points": [
+				[
+					124,
+					0,
+					0
+				],
+				[
+					132,
+					0.5,
+					0
+				]
+			],
+			"running": true,
+			"size": [
+				4,
+				0.5,
+				4
+			],
+			"speed": 2.0,
+			"type": "platform",
+			"wait": 1.0
+		},
+		{
+			"contents": "item",
+			"id": "box_2",
+			"pos": [
+				152.0,
+				0.0,
+				-20.0
+			],
+			"type": "box"
+		},
+		{
+			"color": "fire",
+			"id": "crystal_2",
+			"pos": [
+				148.0,
+				0.0,
+				-18.0
+			],
+			"type": "lumidium_node",
+			"yield": 3
+		},
+		{
+			"id": "trap_1",
+			"kind": "damage",
+			"pos": [
+				176.0,
+				0.0,
+				2.0
+			],
+			"type": "trap"
+		},
+		{
+			"id": "depot_2",
+			"pos": [
+				220.0,
+				0.0,
+				8.0
+			],
+			"type": "lumidium_depot"
+		}
+	],
+	"rules": [
+		{
+			"do": [
+				{
+					"action": "open",
+					"target": "door_1"
+				}
+			],
+			"id": "rule_1",
+			"if": [],
+			"once": true,
+			"when": {
+				"event": "pressed",
+				"source": "plate_1"
+			}
+		},
+		{
+			"do": [
+				{
+					"action": "start_dialogue",
+					"target": "ruin_warning"
+				}
+			],
+			"id": "rule_2",
+			"if": [],
+			"once": true,
+			"when": {
+				"event": "entered",
+				"source": "zone_1"
+			}
+		},
+		{
+			"do": [
+				{
+					"action": "start_combat",
+					"target": "ruin_hall"
+				}
+			],
+			"id": "rule_3",
+			"if": [],
+			"once": true,
+			"when": {
+				"event": "dialogue_ended",
+				"source": "ruin_warning"
+			}
+		},
+		{
+			"do": [
+				{
+					"action": "disable",
+					"target": "mist_1"
+				},
+				{
+					"action": "banner",
+					"text": "The mist clears."
+				}
+			],
+			"id": "rule_4",
+			"if": [],
+			"once": true,
+			"when": {
+				"event": "pressed",
+				"source": "button_1"
+			}
+		},
+		{
+			"do": [
+				{
+					"action": "extend",
+					"target": "bridge_1"
+				}
+			],
+			"id": "rule_5",
+			"if": [],
+			"once": true,
+			"when": {
+				"event": "combat_ended",
+				"source": "watch_post"
+			}
+		},
+		{
+			"do": [
+				{
+					"action": "wake",
+					"target": "teleporter_1"
+				},
+				{
+					"action": "banner",
+					"text": "The way home is open."
+				}
+			],
+			"id": "rule_6",
+			"if": [],
+			"once": true,
+			"when": {
+				"event": "combat_ended",
+				"source": "boss_arena"
+			}
+		}
+	]
+}
