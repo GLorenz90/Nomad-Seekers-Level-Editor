@@ -175,12 +175,12 @@ static func local_aabb(kind: String, d: Dictionary, level: LevelData, pick := fa
 		"start":
 			return _base(Vector3(1.0, 1.8, 1.0))
 		"area":
-			var seed := get_pos(kind, d)
+			var centre := get_pos(kind, d)
 			var box := AABB()
 			var first := true
 			for poly in d.get("polys", []):
 				for v in poly:
-					var p := LevelData.vec3(v) - seed
+					var p := LevelData.vec3(v) - centre
 					box = AABB(p, Vector3.ZERO) if first else box.expand(p)
 					first = false
 			return box.grow(0.05) if not first else _base(Vector3(1, 0.1, 1))

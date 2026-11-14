@@ -144,6 +144,56 @@ func _init() -> void:
 	await settle()
 	check(doc.level.map.assets.size() == 4, "and redo brings it back")
 
+	# Model settings for one model, for a folder, and a list that scrolls.
+	dialogs.models("boulder")
+	await settle()
+	var one := dialogs._open as AcceptDialog
+	var one_labels := one.find_children("*", "Label", true, false).map(func(l): return (l as Label).text)
+	check(one.title == "Model: boulder" and one_labels.any(func(t): return String(t).begins_with("boulder")) \
+		and not one_labels.any(func(t): return String(t).begins_with("pebble")), "a model's settings show just that model")
+	dialogs.models("", ["decoration", "Forest/Nature"])
+	await settle()
+	var some := dialogs._open as AcceptDialog
+	var some_labels := some.find_children("*", "Label", true, false).map(func(l): return (l as Label).text)
+	check(some.title == "Models in Decorations / Forest/Nature" and some_labels.has("Set all 3 of these:"), "a folder's settings show its 3 models, with Set all")
+	var set_all: OptionButton = some.find_children("*", "OptionButton", true, false)[1]
+	set_all.select(0)
+	set_all.item_selected.emit(0)
+	await settle()
+	check(["boulder", "pebble", "oak"].all(func(id): return doc.level.find_asset(id).hitbox == "concave") and doc.level.find_asset("hut").hitbox == "convex",
+		"Set all changes those models and no others")
+	dialogs.models()
+	await settle()
+	var scrolls := (dialogs._open as Window).find_children("*", "ScrollContainer", true, false)
+	var lists := scrolls.filter(func(sc): return (sc as Node).get_child_count() > 0 and (sc as Node).get_child(0) is VBoxContainer)
+	check(lists.size() == 1 and (lists[0] as Node).get_child(0).get_child_count() == 4, "the full list scrolls (all 4 models in it)")
+	(dialogs._open as Window).queue_free()
+
+	# Deleting a folder with everything in it.
+	var placed := doc.add("piece", {"asset": "boulder", "pos": [0, 0, 0], "surface": "obstacle"})
+	doc.add("decoration", {"asset": "oak", "pos": [3, 0, 0]})
+	doc.commit()
+	var gone := doc.delete_folder_contents("decoration", "Forest/Nature")
+	doc.commit()
+	await settle()
+	check(gone.models == 3 and gone.placed == 2 and gone.materials == 3, "deleting a folder takes its models, their copies and materials (%s)" % gone)
+	check(doc.find(placed).is_empty() and doc.level.find_asset("hut").folder == "Forest" and doc.level.map.materials.size() == 1,
+		"and leaves everything else")
+	app.palette.refresh(true)
+	check(not "\n".join(app.palette.outline_text()).contains("Nature"), "the folder is gone from the Place list")
+	doc.undo()
+	await settle()
+	check(not doc.level.find_asset("oak").is_empty() and not doc.find(placed).is_empty(), "Undo brings it all back")
+	doc.redo()
+	await settle()
+	var redo_pack: Dictionary = await dialogs.run_batch(Dialogs.find_models(pack.path_join("nature")), {"root": pack, "keep_subfolders": true,
+		"category": "decoration", "folder": "Forest", "hitbox": "concave", "surface": "obstacle"})
+	(dialogs._open as Window).queue_free()
+	check(redo_pack.imported.size() == 3 and not doc.level.find_asset("boulder").is_empty() and doc.level.find_asset("boulder_2").is_empty()
+		and doc.level.find_asset("oak").folder == "Forest/Nature/Big Trees",
+		"re-importing after deleting keeps the same names (boulder, not boulder_2): %s" % ", ".join(redo_pack.imported))
+	check(doc.level.find_asset("oak").hitbox == "concave", "with the new settings")
+
 	# Several picked files, and files dropped on the window.
 	dialogs.files_dropped(PackedStringArray([pack.path_join("hut.glb"), pack.path_join("nature/rocks/pebble.glb")]))
 	await settle()
@@ -167,7 +217,7 @@ func _init() -> void:
 
 
 ## The Place list shows the pack's folders.
-func pal_check(doc: EditorDoc) -> void:
+func pal_check(_doc: EditorDoc) -> void:
 	app.palette.refresh(true)
 	var lines := "\n".join(app.palette.outline_text())
 	check(lines.contains("Decorations\n  Forest\n    Nature\n      Big Trees\n        Oak") and lines.contains("      Rocks\n        Boulder"),

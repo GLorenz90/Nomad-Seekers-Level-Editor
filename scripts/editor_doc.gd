@@ -442,13 +442,69 @@ func remove_material(id: String) -> void:
 	_erase_id(level.map.materials, id)
 
 
-## Pieces using an imported model.
+## Pieces and decorations using an imported model.
 func uses_of_asset(id: String) -> int:
 	var n := 0
-	for p in level.map.pieces:
-		if String(p.get("asset", "")) == id:
-			n += 1
+	for key in ["pieces", "decorations"]:
+		for p in level.map[key]:
+			if String(p.get("asset", "")) == id:
+				n += 1
 	return n
+
+
+## The materials that came in with a model (imported with "Also add its
+## materials"): marked from_model, or (older ones) named after it.
+func materials_from_model(id: String) -> Array:
+	return level.map.materials.filter(func(m):
+		return String(m.get("from_model", "")) == id \
+			or (not m.has("from_model") and String(m.get("id", "")).begins_with(id + "_") and String(m.get("folder", "")) == id.capitalize()))
+
+
+## Takes imported models out of the level, with their placed copies and
+## (with_materials) the materials that came with them. Their files stay in
+## assets/ (Undo can bring them back; export leaves unused files out).
+## Returns {"models", "placed", "materials"} counts.
+func remove_assets(ids: Array, with_materials := true) -> Dictionary:
+	var out := {"models": 0, "placed": 0, "materials": 0}
+	for id in ids:
+		var asset := level.find_asset(String(id))
+		if asset.is_empty():
+			continue
+		for key in ["pieces", "decorations"]:
+			var kept := []
+			for p in level.map[key]:
+				if String(p.get("asset", "")) == String(id):
+					out.placed += 1
+					if selected == String(p.get("id", "")):
+						selected = ""
+				else:
+					kept.append(p)
+			level.map[key] = kept
+		if with_materials:
+			for m in materials_from_model(String(id)):
+				remove_material(String(m.id))
+				out.materials += 1
+		level.map.assets.erase(asset)
+		out.models += 1
+	return out
+
+
+## Deletes a Place list folder with everything in it (and in the folders
+## inside it): models with their placed copies and materials, or materials.
+## Returns the counts (see remove_assets).
+func delete_folder_contents(category: String, path: String) -> Dictionary:
+	var inside := library_items(category).filter(func(it):
+		var f := String(it.folder)
+		return path == "" or f == path or f.begins_with(path + "/"))
+	var out := {"models": 0, "placed": 0, "materials": 0}
+	if category == "material":
+		for it in inside:
+			remove_material(String(it.id))
+			out.materials += 1
+	else:
+		out = remove_assets(inside.map(func(it): return String(it.id)))
+	delete_folder(category, path)
+	return out
 
 
 ## Pieces painted with a material.

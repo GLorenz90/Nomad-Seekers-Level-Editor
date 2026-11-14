@@ -309,7 +309,11 @@ func _field(d: Dictionary, f: Dictionary, id: String) -> void:
 		"float", "int":
 			var is_int: bool = f.t == "int"
 			var spin := _spin(float(value) if value != null else 0.0, float(f.get("min", -10000)), float(f.get("max", 10000)),
-				1.0 if is_int else 0.01, func(v: float) -> void: save.call(int(v) if is_int else v))
+				1.0 if is_int else 0.01, func(v: float) -> void:
+					if is_int:
+						save.call(int(v))
+					else:
+						save.call(v))
 			spin.custom_arrow_step = float(f.get("step", 1.0))
 			_row(f.l, spin, tip)
 		"bool":

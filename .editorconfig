@@ -1,0 +1,12 @@
+# Godot's script editor indents with tabs; keep every editor doing the same
+# (mixing tabs and spaces in a .gd file is a parse error).
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+
+[*.gd]
+indent_style = tab
+indent_size = 4

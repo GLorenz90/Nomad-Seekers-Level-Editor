@@ -308,21 +308,21 @@ func level_settings() -> void:
 	dialog.title = "Level settings"
 	dialog.ok_button_text = "Done"
 	var box := _vbox(dialog)
-	var set_meta := func(key: String, value: Variant) -> void:
+	var set_field := func(key: String, value: Variant) -> void:
 		meta[key] = value
 		doc.commit("meta:" + key)
 	for spec in [["name", "Name", ""], ["author", "Made by", ""], ["area", "Area", "The area folder this level belongs to in the game, like forest_1 or forest_boss."]]:
 		var edit := LineEdit.new()
 		edit.text = String(meta.get(spec[0], ""))
 		var key: String = spec[0]
-		edit.text_changed.connect(func(text: String) -> void: set_meta.call(key, EditorDoc.slug(text) if key == "area" and text.strip_edges() != "" else text))
+		edit.text_changed.connect(func(text: String) -> void: set_field.call(key, EditorDoc.slug(text) if key == "area" and text.strip_edges() != "" else text))
 		_row(box, spec[1], edit, spec[2])
 	box.add_child(_label("Size: " + Inspector.size_summary(doc.level) + " The size follows the room count.", true))
 	var about := TextEdit.new()
 	about.text = String(meta.get("description", ""))
 	about.custom_minimum_size.y = 70
 	about.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	about.text_changed.connect(func() -> void: set_meta.call("description", about.text))
+	about.text_changed.connect(func() -> void: set_field.call("description", about.text))
 	_row(box, "Description", about)
 	box.add_child(HSeparator.new())
 	box.add_child(_label("Lighting", false, 15))
@@ -443,8 +443,8 @@ static func find_pack_licenses(root: String) -> PackedStringArray:
 		return out
 	for f in DirAccess.get_files_at(root):
 		var base := f.get_basename().to_lower() if f.get_extension() != "" else f.to_lower()
-		for name in PACK_LICENSES:
-			if base == name or base.begins_with(name + "_") or base.begins_with(name + "-") or base.begins_with(name + " "):
+		for lic_name in PACK_LICENSES:
+			if base == lic_name or base.begins_with(lic_name + "_") or base.begins_with(lic_name + "-") or base.begins_with(lic_name + " "):
 				if f.get_extension() == "" or Licenses.FILES.has(f.get_extension().to_lower()):
 					out.append(root.path_join(f))
 				break
@@ -513,11 +513,11 @@ func _batch_details(files: PackedStringArray, root: String, category := "prefab"
 	materials.text = "Also add their materials to Materials"
 	materials.tooltip_text = "Each model's colors and images become level materials, in a folder named after the model."
 	box.add_child(materials)
-	var licenses := find_pack_licenses(root)
+	var pack_licenses := find_pack_licenses(root)
 	var take_licenses := CheckBox.new()
-	take_licenses.text = "Add the pack's license (%s) to Level > Licenses" % ", ".join(Array(licenses).map(func(f): return String(f).get_file()))
+	take_licenses.text = "Add the pack's license (%s) to Level > Licenses" % ", ".join(Array(pack_licenses).map(func(f): return String(f).get_file()))
 	take_licenses.button_pressed = true
-	if not licenses.is_empty():
+	if not pack_licenses.is_empty():
 		box.add_child(take_licenses)
 	box.add_child(HSeparator.new())
 	var surface := _surface_options("obstacle")
@@ -531,7 +531,7 @@ func _batch_details(files: PackedStringArray, root: String, category := "prefab"
 		var options := {"root": root, "keep_subfolders": root != "" and keep.button_pressed, "category": String(where.get_selected_metadata()),
 			"folder": _folder_text(folder_edit), "surface": String(surface.get_selected_metadata()),
 			"hitbox": String(hitbox.get_selected_metadata()), "materials": materials.button_pressed,
-			"licenses": licenses if take_licenses.button_pressed else PackedStringArray()}
+			"licenses": pack_licenses if take_licenses.button_pressed else PackedStringArray()}
 		dialog.queue_free()
 		run_batch(list[0], options))
 	_show(dialog, Vector2i(640, 0))
@@ -600,28 +600,28 @@ func run_batch(files: PackedStringArray, options: Dictionary) -> Dictionary:
 ## imported; a single image becomes a new material.
 func files_dropped(paths: PackedStringArray) -> void:
 	if app.doc == null:
-		app.toast("Open or make a level first, then drop models onto the window.")
+		app.toast("Open or make a level first, then drop dropped_models onto the window.")
 		return
-	var models := PackedStringArray()
+	var dropped_models := PackedStringArray()
 	var images := PackedStringArray()
 	var folder := ""
 	for p in paths:
 		if DirAccess.dir_exists_absolute(p):
 			folder = p if folder == "" else folder
 		elif p.get_extension().to_lower() in ["glb", "gltf"]:
-			models.append(p)
+			dropped_models.append(p)
 		elif p.get_extension().to_lower() in LevelData.TEXTURE_FILES:
 			images.append(p)
-	if folder != "" and models.is_empty():
+	if folder != "" and dropped_models.is_empty():
 		_batch_details(PackedStringArray(), folder)
-	elif models.size() == 1:
-		_import_details(models[0])
-	elif models.size() > 1:
-		_batch_details(models, "")
+	elif dropped_models.size() == 1:
+		_import_details(dropped_models[0])
+	elif dropped_models.size() > 1:
+		_batch_details(dropped_models, "")
 	elif images.size() >= 1:
 		material_dialog("", images[0])
 	else:
-		app.toast("Drop .glb / .gltf models, a folder of them, or an image (for a material).")
+		app.toast("Drop .glb / .gltf dropped_models, a folder of them, or an image (for a material).")
 
 
 func _import_details(path: String, category := "prefab", folder := "") -> void:
@@ -701,8 +701,23 @@ func _folder_text(field: HBoxContainer) -> String:
 	return EditorDoc.clean_folder((field.get_node("Path") as LineEdit).text)
 
 
+## A quick look before Godot's glTF reader opens a file, so a damaged or
+## misnamed file is skipped quietly instead of filling the Output with
+## parser errors: a .glb starts with "glTF"; a .gltf is JSON with "asset".
+static func looks_like_gltf(path: String) -> bool:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return false
+	if path.get_extension().to_lower() == "glb":
+		return f.get_length() > 12 and f.get_buffer(4).get_string_from_ascii() == "glTF"
+	var parsed = JSON.parse_string(f.get_as_text())
+	return parsed is Dictionary and parsed.has("asset")
+
+
 ## How many materials a glTF model brings (0 if it can't be read).
 func _model_materials(path: String) -> int:
+	if not looks_like_gltf(path):
+		return 0
 	var state := GLTFState.new()
 	if GLTFDocument.new().append_from_file(path, state) != OK:
 		return 0
@@ -717,15 +732,21 @@ func import_file(path: String, surface := "obstacle", hitbox := "concave",
 	var ext := path.get_extension().to_lower()
 	if not ext in ["glb", "gltf"]:
 		return "Only .glb and .gltf models can be imported."
+	if not looks_like_gltf(path):
+		return "That file isn't a glTF model (it may be damaged or misnamed)."
 	var assets := doc.level.dir.path_join("assets")
 	DirAccess.make_dir_recursive_absolute(assets)
 	var id := EditorDoc.slug(path.get_file().get_basename())
 	var taken := doc.level.ids()
+	var files := {}
 	for a in doc.level.map.assets:
 		taken[String(a.get("id", ""))] = true
+		files[String(a.get("file", ""))] = true
 	var base := id
 	var n := 2
-	while taken.has(id) or FileAccess.file_exists(assets.path_join(id + "." + ext)):
+	# A file left in assets/ by a removed model is reused (re-importing a
+	# pack after removing it keeps the same names).
+	while taken.has(id) or files.has("assets/" + id + "." + ext):
 		id = "%s_%d" % [base, n]
 		n += 1
 	var dest := assets.path_join(id + "." + ext)
@@ -782,7 +803,7 @@ func extract_materials(model_path: String, model_id: String) -> Array:
 		var label := base.resource_name if base.resource_name != "" else "%s %d" % [model_id.capitalize(), n]
 		var id := _unique_material_id(EditorDoc.slug(model_id + "_" + label))
 		# A model's textures are unwrapped onto its UVs, so they keep UV mapping.
-		var spec := {"id": id, "name": label, "folder": model_id.capitalize(), "mapping": "uv", "uv_repeat": 1.0, "tile": 2.0,
+		var spec := {"id": id, "name": label, "folder": model_id.capitalize(), "from_model": model_id, "mapping": "uv", "uv_repeat": 1.0, "tile": 2.0,
 			"color": _rgb(base.albedo_color), "roughness": snappedf(base.roughness, 0.01), "metallic": snappedf(base.metallic, 0.01)}
 		var maps := [["albedo", base.albedo_texture, ""],
 			["normal", base.normal_texture if base.normal_enabled else null, "_normal"],
@@ -1099,15 +1120,75 @@ func _spin_box(value: float, lo: float, hi: float, step: float) -> SpinBox:
 	return spin
 
 
-func models() -> void:
+## Level > Imported models: every imported model's settings, in a list that
+## scrolls. `only`: just that model (its right-click "Model settings...");
+## `folder`: [category, path], the models in that Place list folder (and the
+## folders inside it), with a row to set all of them at once.
+func models(only := "", folder: Array = []) -> void:
 	var doc := _doc()
+	var list: Array = (doc.level.map.assets as Array).duplicate()
+	var title := "Imported models"
+	if only != "":
+		list = list.filter(func(a): return String(a.get("id", "")) == only)
+		title = "Model: " + only
+	elif folder.size() == 2:
+		var path := String(folder[1])
+		list = list.filter(func(a): return String(a.get("category", "prefab")) == String(folder[0]) \
+			and (path == "" or String(a.get("folder", "")) == path or String(a.get("folder", "")).begins_with(path + "/")))
+		title = "Models in %s%s" % [Catalog.LIBRARY_GROUPS.get(String(folder[0]), String(folder[0])), " / " + path if path != "" else ""]
 	var dialog := AcceptDialog.new()
-	dialog.title = "Imported models"
+	dialog.title = title
 	dialog.ok_button_text = "Done"
 	var box := _vbox(dialog)
 	if (doc.level.map.assets as Array).is_empty():
 		box.add_child(_label("No models imported yet. Import .glb or .gltf files (Kenney, KayKit, Quaternius and similar packs work well), then place them from the Map layer's palette.", true))
-	for a in doc.level.map.assets:
+	elif list.is_empty():
+		box.add_child(_label("No models here.", true))
+	var reopen := func() -> void:
+		models(only, folder)
+	# Every model in the list at once.
+	if list.size() > 1:
+		var all_row := HBoxContainer.new()
+		var all_label := Label.new()
+		all_label.text = "Set all %d of these:" % list.size()
+		all_label.custom_minimum_size.x = 300
+		all_row.add_child(all_label)
+		var all_surface := _surface_options("")
+		all_surface.add_item("Acts as...", 99)
+		all_surface.set_item_metadata(all_surface.item_count - 1, "")
+		all_surface.select(all_surface.item_count - 1)
+		all_surface.item_selected.connect(func(index: int) -> void:
+			var v := String(all_surface.get_item_metadata(index))
+			if v == "":
+				return
+			for a in list:
+				a.surface = v
+			doc.commit()
+			reopen.call())
+		all_row.add_child(all_surface)
+		var all_hitbox := _hitbox_options("")
+		all_hitbox.add_item("Hitbox...", 99)
+		all_hitbox.set_item_metadata(all_hitbox.item_count - 1, "")
+		all_hitbox.select(all_hitbox.item_count - 1)
+		all_hitbox.item_selected.connect(func(index: int) -> void:
+			var v := String(all_hitbox.get_item_metadata(index))
+			if v == "":
+				return
+			for a in list:
+				a.hitbox = v
+			doc.commit()
+			reopen.call())
+		all_row.add_child(all_hitbox)
+		box.add_child(all_row)
+		box.add_child(HSeparator.new())
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size = Vector2(0, clampi(list.size() * 38, 40, 480))
+	var rows := VBoxContainer.new()
+	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(rows)
+	box.add_child(scroll)
+	for a in list:
 		var used := 0
 		for key in ["pieces", "decorations"]:
 			for p in doc.level.map[key]:
@@ -1115,8 +1196,11 @@ func models() -> void:
 					used += 1
 		var row := HBoxContainer.new()
 		var name_label := Label.new()
-		name_label.text = "%s  (placed %d time(s))" % [a.id, used]
-		name_label.custom_minimum_size.x = 220
+		var where := String(a.get("folder", ""))
+		name_label.text = "%s  (placed %d)" % [a.id, used]
+		name_label.tooltip_text = "%s%s" % [Catalog.LIBRARY_GROUPS.get(String(a.get("category", "prefab")), ""), " / " + where if where != "" else ""]
+		name_label.custom_minimum_size.x = 300
+		name_label.clip_text = true
 		row.add_child(name_label)
 		var surface := _surface_options(String(a.get("surface", "obstacle")))
 		surface.tooltip_text = "\n".join(Catalog.SURFACE_HELP.values())
@@ -1134,17 +1218,26 @@ func models() -> void:
 		row.add_child(hitbox)
 		var remove := Button.new()
 		remove.text = "Remove"
-		remove.disabled = used > 0
-		remove.tooltip_text = "Delete the things that use it first." if used > 0 else "Take this model out of the level."
+		remove.tooltip_text = "Take this model out of the level." if used == 0 else "Take this model and its %d placed cop%s out of the level." % [used, "y" if used == 1 else "ies"]
 		remove.pressed.connect(func() -> void:
-			(doc.level.map.assets as Array).erase(a)
-			doc.commit()
-			models())
+			var go := func() -> void:
+				doc.remove_assets([String(a.id)])
+				doc.commit()
+				reopen.call()
+			if used == 0:
+				go.call()
+			else:
+				ask("Remove %s?" % a.id, "It's placed %d time%s; those go too." % [used, "" if used == 1 else "s"], "Remove", go))
 		row.add_child(remove)
-		box.add_child(row)
+		rows.add_child(row)
 	var buttons := HBoxContainer.new()
+	if only != "" or folder.size() == 2:
+		var all := Button.new()
+		all.text = "All imported models"
+		all.pressed.connect(func() -> void: models())
+		buttons.add_child(all)
 	var add := Button.new()
-	add.text = "Import a model..."
+	add.text = "Import models..."
 	add.pressed.connect(func() -> void:
 		dialog.queue_free()
 		import_model())
@@ -1157,7 +1250,7 @@ func models() -> void:
 	buttons.add_child(lic)
 	box.add_child(buttons)
 	dialog.confirmed.connect(dialog.queue_free)
-	_show(dialog, Vector2i(820, 0))
+	_show(dialog, Vector2i(860, 0))
 
 
 # --- Licenses ---------------------------------------------------------------------------------
@@ -1187,11 +1280,11 @@ func pick_license_files(on_done := Callable()) -> void:
 		var added := PackedStringArray()
 		var skipped := PackedStringArray()
 		for path in list:
-			var name := Licenses.add_file(_doc().level, path)
-			if name == "":
+			var kept := Licenses.add_file(_doc().level, path)
+			if kept == "":
 				skipped.append(path.get_file())
 			else:
-				added.append(name)
+				added.append(kept)
 		if not skipped.is_empty():
 			app.toast("Skipped %s: licenses can be .txt, .md, .pdf, .rtf or .html files, or a file with no extension like LICENSE." % ", ".join(skipped))
 		if on_done.is_valid():

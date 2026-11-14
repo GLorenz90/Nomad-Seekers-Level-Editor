@@ -58,14 +58,14 @@ func make_model(path: String) -> void:
 	mi.mesh = mesh
 	mi.material_override = mat
 	mesh.material = mat
-	var root := Node3D.new()
-	root.name = "Stump"
-	root.add_child(mi)
+	var model_root := Node3D.new()
+	model_root.name = "Stump"
+	model_root.add_child(mi)
 	var doc := GLTFDocument.new()
 	var state := GLTFState.new()
-	doc.append_from_scene(root, state)
+	doc.append_from_scene(model_root, state)
 	doc.write_to_filesystem(state, path)
-	root.free()
+	model_root.free()
 
 
 func _init() -> void:

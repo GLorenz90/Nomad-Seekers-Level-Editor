@@ -54,6 +54,11 @@ it makes the level compliant. Its `BUILD_LOG.md` lists each step.
        the summary, and one Undo takes the whole import back.
      - **Drag models from your file manager** onto the window: one model, several, or a folder.
        Dropping an image starts a new material from it.
+     - **Fixing settings:** right-click a model > **Model settings...** for just that model, or a
+       folder > **Model settings for everything in here...** to change them all at once (Set all).
+     - **Starting over:** right-click a folder > **Delete folder and everything in it...** removes
+       its models, the materials that came with them and their placed copies (Undo brings them
+       back). Import them again and they keep their names.
 
      ![Importing a model pack](docs/screenshots/import_folder.png)
    - **Materials**: paint a shape or a model. Make one from an image ("+ New material from an

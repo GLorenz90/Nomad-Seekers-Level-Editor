@@ -242,8 +242,11 @@ func _open_menu(it: TreeItem, meta: Dictionary) -> void:
 				_item("Delete folder (keeps what's in it)", func() -> void:
 					doc.delete_folder(library, path)
 					doc.commit())
+				_item("Delete folder and everything in it...", func() -> void: _delete_folder_contents(library, path))
 			_menu.add_separator()
 			_menu_actions.append(Callable())
+			if library in ["decoration", "prefab"]:
+				_item("Model settings for everything in here...", func() -> void: app.dialogs.models("", [library, path]))
 			_item("Open everything inside", func() -> void: _set_collapsed(it, false))
 			_item("Close everything inside", func() -> void: _set_collapsed(it, true))
 		"entry":
@@ -256,7 +259,7 @@ func _open_menu(it: TreeItem, meta: Dictionary) -> void:
 			if library == "material":
 				_item("Edit material...", func() -> void: app.dialogs.material_dialog(id))
 			else:
-				_item("Model settings...", func() -> void: app.dialogs.models())
+				_item("Model settings...", func() -> void: app.dialogs.models(id))
 				var other := "prefab" if library == "decoration" else "decoration"
 				_item("Move to %s" % Catalog.LIBRARY_GROUPS[other], func() -> void:
 					data.category = other
@@ -299,12 +302,14 @@ func _open_menu(it: TreeItem, meta: Dictionary) -> void:
 						app.dialogs.ask("Delete %s?" % e.title, "%d piece%s painted with it go back to their plain color." % [uses, "" if uses == 1 else "s"], "Delete", go))
 			else:
 				var uses := doc.uses_of_asset(id)
-				_item("Remove from the level" if uses == 0 else "Remove from the level (used %d times)" % uses, func() -> void:
-					if uses > 0:
-						app.dialogs.tell("It's in use", "%d piece%s use %s. Delete them first (the outline lists them), then remove the model." % [uses, "" if uses == 1 else "s", e.title])
-						return
-					doc.level.map.assets.erase(data)
-					doc.commit())
+				_item("Remove from the level" if uses == 0 else "Remove from the level (placed %d times)..." % uses, func() -> void:
+					var go := func() -> void:
+						doc.remove_assets([id])
+						doc.commit()
+					if uses == 0:
+						go.call()
+					else:
+						app.dialogs.ask("Remove %s?" % e.title, "It's placed %d time%s; those go too. Undo brings everything back." % [uses, "" if uses == 1 else "s"], "Remove", go))
 		_:
 			return
 	_menu.position = Vector2i(get_screen_position() + get_local_mouse_position())
@@ -353,6 +358,36 @@ func _rename_folder(library: String, path: String) -> void:
 	app.dialogs.ask_text("Rename folder", "New name (use / to move it inside another folder):", path, func(text: String) -> void:
 		doc.rename_folder(library, path, text)
 		doc.commit())
+
+
+## "Delete folder and everything in it": asks first, saying what goes.
+func _delete_folder_contents(library: String, path: String) -> void:
+	var doc: EditorDoc = app.doc
+	var inside := doc.library_items(library).filter(func(it):
+		return String(it.folder) == path or String(it.folder).begins_with(path + "/"))
+	var what := ""
+	if library == "material":
+		var painted := 0
+		for it in inside:
+			painted += doc.uses_of_material(String(it.id))
+		what = "%d material%s%s." % [inside.size(), "" if inside.size() == 1 else "s",
+			"; %d piece%s painted with them go back to their plain color" % [painted, "" if painted == 1 else "s"] if painted > 0 else ""]
+	else:
+		var placed := 0
+		var mats := 0
+		for it in inside:
+			placed += doc.uses_of_asset(String(it.id))
+			mats += doc.materials_from_model(String(it.id)).size()
+		what = "%d model%s%s%s." % [inside.size(), "" if inside.size() == 1 else "s",
+			", the %d material%s that came with them" % [mats, "" if mats == 1 else "s"] if mats > 0 else "",
+			", and %d placed cop%s of them" % [placed, "y" if placed == 1 else "ies"] if placed > 0 else ""]
+	app.dialogs.ask("Delete %s and everything in it?" % path.get_file(),
+		"This removes %s Use it to start over: import them again with the settings you want. Undo brings everything back." % what,
+		"Delete", func() -> void:
+			var done := doc.delete_folder_contents(library, path)
+			doc.commit()
+			app.toast("Deleted %s: %d model%s, %d material%s, %d placed." % [path, done.models, "" if done.models == 1 else "s",
+				done.materials, "" if done.materials == 1 else "s", done.placed]))
 
 
 ## Imports a model, or starts a material, into a category and folder.
