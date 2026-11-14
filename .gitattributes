@@ -1,0 +1,9 @@
+# CRLF line endings in every checkout (Grayson 2026-11-14); the repository
+# itself keeps LF. Binary files (models, images) are detected and left alone.
+* text=auto eol=crlf
+*.glb binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.bin binary
