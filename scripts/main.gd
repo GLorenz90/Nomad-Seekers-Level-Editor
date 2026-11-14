@@ -90,6 +90,8 @@ func _ready() -> void:
 	add_child(quests)
 	_build()
 	_refresh_all()
+	# Models (or a folder of them, or an image) dropped from the file manager.
+	get_window().files_dropped.connect(func(paths: PackedStringArray) -> void: dialogs.files_dropped(paths))
 	var open_dir := ""
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--open="):
@@ -132,7 +134,8 @@ func _build() -> void:
 		["Settings...", dialogs.settings], ["Quit", func() -> void: dialogs.leave_level(func() -> void: get_tree().quit())]])
 	_menu(bar, "Level", [["Level settings...", func() -> void: _need_doc(dialogs.level_settings)],
 		["Imported models...", func() -> void: _need_doc(dialogs.models)],
-		["Import a model...", func() -> void: _need_doc(dialogs.import_model)],
+		["Import models...", func() -> void: _need_doc(dialogs.import_model)],
+		["Import a folder of models...", func() -> void: _need_doc(dialogs.import_folder)],
 		["New material from an image...", func() -> void: _need_doc(dialogs.import_material)],
 		["Licenses...", func() -> void: _need_doc(dialogs.licenses)], [],
 		["Playtest in the game   F5", playtest]])
