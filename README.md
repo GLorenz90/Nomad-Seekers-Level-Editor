@@ -43,9 +43,19 @@ it makes the level compliant. Its `BUILD_LOG.md` lists each step.
        or longer) until it does.
      - A curved wall has a **Bend** in degrees (0 is straight, 360 a full ring; negative bends the
        other way). Its width is its length along the curve.
-   - **Decorations** and **Prefabs**: your own models. Use "+ Import a model..." in either (or
-     Level > Import a model) and pick which one it goes in. They're the same to the game; the split
-     is just to keep small dressing apart from bigger ready-made pieces.
+   - **Decorations** and **Prefabs**: your own models. They're the same to the game; the split is
+     just to keep small dressing apart from bigger ready-made pieces. To bring models in:
+     - **"+ Import models..."** (or Level > Import models) picks one model or several (Ctrl / Shift).
+     - **"+ Import a folder of models..."** (or Level > Import a folder of models) takes a whole model
+       pack: every `.glb` / `.gltf` in it and, if you like, its subfolders, with one set of
+       settings. The pack's subfolders can become folders in the Place list (`nature/rocks` →
+       Nature / Rocks). Its License.txt (or LICENSE) can go straight into Level > Licenses.
+       Models already in the level are skipped, a file that can't be read is skipped and named in
+       the summary, and one Undo takes the whole import back.
+     - **Drag models from your file manager** onto the window: one model, several, or a folder.
+       Dropping an image starts a new material from it.
+
+     ![Importing a model pack](docs/screenshots/import_folder.png)
    - **Materials**: paint a shape or a model. Make one from an image ("+ New material from an
      image..." or Level > New material), or tick "Also add its materials" when importing a model
      to bring its textures along. Pick a material in the list, then click pieces to paint them
@@ -194,6 +204,7 @@ The navmesh, the rooms and the hitboxes come from the same code on both sides.
 godot --headless --path . --script res://tests/editor_test.gd     # rooms, boundaries, sizes, surfaces, checks, saving
 godot --headless --path . --script res://tests/stress_test.gd     # the whole app through odd build orders
 godot --headless --path . --script res://tests/library_test.gd    # importing, folders, materials, stairs, curved walls
+godot --headless --path . --script res://tests/batch_test.gd      # importing many models: packs, subfolders, licenses, skips, drops
 godot --headless --path . --script res://tests/quest_test.gd      # quests: Nomad-2, people, quest triggers, details, export (needs ../nomad-seekers)
 xvfb-run godot --path . --resolution 1600x900 --script res://tests/ui_test.gd   # mouse: placing, the handles
 godot --headless --path . --script res://tools/build_starter_level.gd   # rebuilds examples/starter_large

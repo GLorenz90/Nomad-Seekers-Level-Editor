@@ -392,9 +392,236 @@ func settings() -> void:
 
 # --- Imported models --------------------------------------------------------------------------
 
+## Picks one or more models (Ctrl / Shift to pick several).
 func import_model(category := "prefab", folder := "") -> void:
-	pick_file(FileDialog.FILE_MODE_OPEN_FILE, "Import a model (glTF)", PackedStringArray(["*.glb,*.gltf ; glTF models"]),
-		func(path: String) -> void: _import_details(path, category, folder))
+	pick_file(FileDialog.FILE_MODE_OPEN_FILES, "Import models (glTF): pick one or several", PackedStringArray(["*.glb,*.gltf ; glTF models"]),
+		func(paths: Variant) -> void:
+			var list: PackedStringArray = paths if paths is PackedStringArray else PackedStringArray([String(paths)])
+			if list.size() == 1:
+				_import_details(list[0], category, folder)
+			elif list.size() > 1:
+				_batch_details(list, "", category, folder))
+
+
+## Picks a folder and imports the models in it (and its subfolders).
+func import_folder(category := "prefab", folder := "") -> void:
+	pick_file(FileDialog.FILE_MODE_OPEN_DIR, "Import a folder of models (a model pack)", PackedStringArray(),
+		func(path: String) -> void: _batch_details(PackedStringArray(), path, category, folder))
+
+
+# --- Importing many models ----------------------------------------------------------------------
+
+const BATCH_MAX := 2000
+## License-like file names a model pack ships with (checked lowercased).
+const PACK_LICENSES := ["license", "licence", "copying", "notice", "credits", "readme_license", "attribution"]
+
+
+## The .glb / .gltf files in a folder (and its subfolders), sorted.
+static func find_models(root: String, subfolders := true) -> PackedStringArray:
+	var out := PackedStringArray()
+	_scan_models(root, subfolders, out)
+	out.sort()
+	return out
+
+
+static func _scan_models(dir: String, deep: bool, out: PackedStringArray) -> void:
+	if out.size() >= BATCH_MAX or not DirAccess.dir_exists_absolute(dir):
+		return
+	for f in DirAccess.get_files_at(dir):
+		if f.get_extension().to_lower() in ["glb", "gltf"]:
+			out.append(dir.path_join(f))
+	if deep:
+		for d in DirAccess.get_directories_at(dir):
+			if not d.begins_with("."):
+				_scan_models(dir.path_join(d), true, out)
+
+
+## License files at the top of a pack folder (License.txt, LICENSE...).
+static func find_pack_licenses(root: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	if root == "" or not DirAccess.dir_exists_absolute(root):
+		return out
+	for f in DirAccess.get_files_at(root):
+		var base := f.get_basename().to_lower() if f.get_extension() != "" else f.to_lower()
+		for name in PACK_LICENSES:
+			if base == name or base.begins_with(name + "_") or base.begins_with(name + "-") or base.begins_with(name + " "):
+				if f.get_extension() == "" or Licenses.FILES.has(f.get_extension().to_lower()):
+					out.append(root.path_join(f))
+				break
+	return out
+
+
+## Where a model in a pack goes in the Place list: the base folder, plus
+## the pack's subfolders (nature/rocks -> Nature/Rocks) when kept.
+static func pack_folder(path: String, root: String, base: String, keep_subfolders: bool) -> String:
+	if not keep_subfolders or root == "":
+		return EditorDoc.clean_folder(base)
+	var rel := path.get_base_dir().trim_prefix(root).trim_prefix("/")
+	var parts := PackedStringArray()
+	if base.strip_edges() != "":
+		parts.append(base)
+	for part in rel.split("/", false):
+		parts.append(part.replace("_", " ").replace("-", " ").capitalize())
+	return EditorDoc.clean_folder("/".join(parts))
+
+
+## The id of an imported model with exactly this file's contents ("" if none).
+func _already_imported(path: String) -> String:
+	var doc := _doc()
+	var md5 := FileAccess.get_md5(path)
+	for a in doc.level.map.assets:
+		var file := doc.level.dir.path_join(String(a.get("file", "")))
+		if FileAccess.file_exists(file) and FileAccess.get_md5(file) == md5:
+			return String(a.id)
+	return ""
+
+
+## One settings window for many models: a list of files, or a folder.
+func _batch_details(files: PackedStringArray, root: String, category := "prefab", folder := "") -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Import models" if root == "" else "Import the models in " + root.get_file()
+	dialog.ok_button_text = "Import"
+	var box := _vbox(dialog)
+	var found := _label("", true)
+	box.add_child(found)
+	var deep := CheckBox.new()
+	deep.text = "Include subfolders"
+	deep.button_pressed = true
+	var keep := CheckBox.new()
+	keep.text = "Keep the pack's subfolders as folders in the Place list"
+	keep.tooltip_text = "nature/rocks/boulder.glb goes in Nature / Rocks (inside the folder below, if you give one)."
+	keep.button_pressed = true
+	var list: Array = [files]
+	var refresh := func() -> void:
+		if root != "":
+			list[0] = find_models(root, deep.button_pressed)
+		var n: int = (list[0] as PackedStringArray).size()
+		var shown := ", ".join(Array(list[0]).slice(0, 6).map(func(f): return String(f).get_file()))
+		found.text = ("No .glb or .gltf models found here." if n == 0 else "%d model%s: %s%s" % [n, "" if n == 1 else "s", shown, "..." if n > 6 else ""]) \
+			+ ("" if n < BATCH_MAX else " (only the first %d)" % BATCH_MAX)
+		dialog.get_ok_button().disabled = n == 0
+	if root != "":
+		box.add_child(deep)
+		box.add_child(keep)
+		deep.toggled.connect(func(_v: bool) -> void: refresh.call())
+	var where := _options([["prefab", "Prefabs (buildings, bridges, set pieces)"], ["decoration", "Decorations (plants, rocks, props)"]], category)
+	_row(box, "Goes in", where, "Where they're listed in the Place list. You can move any of them later.")
+	var folder_edit := _folder_field(category, folder)
+	_row(box, "Folder", folder_edit, "Optional. Use / for folders inside folders, like Forest/Trees.")
+	where.item_selected.connect(func(index: int) -> void: _fill_folder_menu(folder_edit, String(where.get_item_metadata(index))))
+	var materials := CheckBox.new()
+	materials.text = "Also add their materials to Materials"
+	materials.tooltip_text = "Each model's colors and images become level materials, in a folder named after the model."
+	box.add_child(materials)
+	var licenses := find_pack_licenses(root)
+	var take_licenses := CheckBox.new()
+	take_licenses.text = "Add the pack's license (%s) to Level > Licenses" % ", ".join(Array(licenses).map(func(f): return String(f).get_file()))
+	take_licenses.button_pressed = true
+	if not licenses.is_empty():
+		box.add_child(take_licenses)
+	box.add_child(HSeparator.new())
+	var surface := _surface_options("obstacle")
+	_row(box, "Acts as", surface, "\n".join(Catalog.SURFACE_HELP.values()))
+	var hitbox := _hitbox_options("concave")
+	_row(box, "Hitbox", hitbox, "Concave follows every triangle (exact); convex wraps each in one hull (faster, fills in arches).")
+	surface.item_selected.connect(func(index: int) -> void: hitbox.disabled = String(surface.get_item_metadata(index)) == "intangible")
+	box.add_child(_label("These apply to all of them. Change any model later (Level > Imported models) or any placed copy (inspector). Models already in the level are skipped.", true))
+	refresh.call()
+	dialog.confirmed.connect(func() -> void:
+		var options := {"root": root, "keep_subfolders": root != "" and keep.button_pressed, "category": String(where.get_selected_metadata()),
+			"folder": _folder_text(folder_edit), "surface": String(surface.get_selected_metadata()),
+			"hitbox": String(hitbox.get_selected_metadata()), "materials": materials.button_pressed,
+			"licenses": licenses if take_licenses.button_pressed else PackedStringArray()}
+		dialog.queue_free()
+		run_batch(list[0], options))
+	_show(dialog, Vector2i(640, 0))
+
+
+## Imports many models with a progress window, then shows what happened.
+## options: root, keep_subfolders, category, folder, surface, hitbox,
+## materials, licenses. Returns the summary
+## {"imported": [ids], "skipped": [[file, why]], "materials": n, "licenses": [names]}.
+func run_batch(files: PackedStringArray, options: Dictionary) -> Dictionary:
+	var doc := _doc()
+	var progress := AcceptDialog.new()
+	progress.title = "Importing models"
+	progress.get_ok_button().visible = false
+	var box := _vbox(progress)
+	var bar := ProgressBar.new()
+	bar.max_value = maxi(files.size(), 1)
+	bar.custom_minimum_size.x = 420
+	box.add_child(bar)
+	var now := _label("", false)
+	box.add_child(now)
+	_show(progress)
+	var summary := {"imported": [], "skipped": [], "materials": 0, "licenses": []}
+	var before_materials: int = doc.level.map.materials.size()
+	for i in files.size():
+		var path := files[i]
+		now.text = path.get_file()
+		bar.value = i
+		await get_tree().process_frame
+		var twin := _already_imported(path)
+		if twin != "":
+			summary.skipped.append([path.get_file(), "already in the level as \"%s\"" % twin])
+			continue
+		var where := pack_folder(path, String(options.get("root", "")), String(options.get("folder", "")), bool(options.get("keep_subfolders", false)))
+		var problem := import_file(path, String(options.get("surface", "obstacle")), String(options.get("hitbox", "concave")),
+			String(options.get("category", "prefab")), where, bool(options.get("materials", false)), false)
+		if problem != "":
+			summary.skipped.append([path.get_file(), problem])
+		else:
+			summary.imported.append(String(doc.level.map.assets[doc.level.map.assets.size() - 1].id))
+	for lic in options.get("licenses", PackedStringArray()):
+		var kept := Licenses.add_file(doc.level, String(lic))
+		if kept != "":
+			summary.licenses.append(kept)
+	summary.materials = doc.level.map.materials.size() - before_materials
+	if is_instance_valid(progress):
+		progress.queue_free()
+	if not summary.imported.is_empty():
+		doc.commit()
+	var lines := PackedStringArray()
+	lines.append("Imported %d model%s%s." % [summary.imported.size(), "" if summary.imported.size() == 1 else "s",
+		" and %d material%s" % [summary.materials, "" if summary.materials == 1 else "s"] if summary.materials > 0 else ""])
+	if not summary.licenses.is_empty():
+		lines.append("Added the license %s (Level > Licenses)." % ", ".join(summary.licenses))
+	if not summary.skipped.is_empty():
+		lines.append("\nSkipped %d:" % summary.skipped.size())
+		for s in (summary.skipped as Array).slice(0, 30):
+			lines.append("  %s: %s" % [s[0], s[1]])
+		if summary.skipped.size() > 30:
+			lines.append("  ...and %d more." % (summary.skipped.size() - 30))
+	tell("Import finished", "\n".join(lines))
+	return summary
+
+
+## Files dropped onto the editor window: models (or folders of them) are
+## imported; a single image becomes a new material.
+func files_dropped(paths: PackedStringArray) -> void:
+	if app.doc == null:
+		app.toast("Open or make a level first, then drop models onto the window.")
+		return
+	var models := PackedStringArray()
+	var images := PackedStringArray()
+	var folder := ""
+	for p in paths:
+		if DirAccess.dir_exists_absolute(p):
+			folder = p if folder == "" else folder
+		elif p.get_extension().to_lower() in ["glb", "gltf"]:
+			models.append(p)
+		elif p.get_extension().to_lower() in LevelData.TEXTURE_FILES:
+			images.append(p)
+	if folder != "" and models.is_empty():
+		_batch_details(PackedStringArray(), folder)
+	elif models.size() == 1:
+		_import_details(models[0])
+	elif models.size() > 1:
+		_batch_details(models, "")
+	elif images.size() >= 1:
+		material_dialog("", images[0])
+	else:
+		app.toast("Drop .glb / .gltf models, a folder of them, or an image (for a material).")
 
 
 func _import_details(path: String, category := "prefab", folder := "") -> void:
@@ -485,7 +712,7 @@ func _model_materials(path: String) -> int:
 ## Copies a model into the level's assets folder and lists it. Returns ""
 ## or what went wrong.
 func import_file(path: String, surface := "obstacle", hitbox := "concave",
-		category := "prefab", folder := "", with_materials := false) -> String:
+		category := "prefab", folder := "", with_materials := false, finish := true) -> String:
 	var doc := _doc()
 	var ext := path.get_extension().to_lower()
 	if not ext in ["glb", "gltf"]:
@@ -525,6 +752,8 @@ func import_file(path: String, surface := "obstacle", hitbox := "concave",
 	doc.set_folder(entry, folder)
 	doc.level.map.assets.append(entry)
 	var made := extract_materials(dest, id) if with_materials else []
+	if not finish:
+		return ""  # many at once: run_batch commits and reports
 	doc.commit()
 	app.toast("Imported \"%s\" as %s, under %s%s.%s" % [id, String(Catalog.SURFACE_NAMES[surface]).to_lower(),
 		"Prefabs" if category == "prefab" else "Decorations", " / " + EditorDoc.clean_folder(folder) if EditorDoc.clean_folder(folder) != "" else "",

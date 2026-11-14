@@ -132,8 +132,12 @@ func _build() -> void:
 			var row := _row(parent, e.title, {"type": "entry", "entry": e}, Color(1, 1, 1))
 			row.set_tooltip_text(0, e.tip)
 		if library != "" and filter == "":
-			var label: String = {"decoration": "+ Import a model...", "prefab": "+ Import a model...", "material": "+ New material from an image..."}[library]
-			_row(head, label, {"type": "action", "library": library, "path": ""}, ACTION_COLOR)
+			var label: String = {"decoration": "+ Import models...", "prefab": "+ Import models...", "material": "+ New material from an image..."}[library]
+			_row(head, label, {"type": "action", "library": library, "path": ""}, ACTION_COLOR).set_tooltip_text(0,
+				"Pick one model or several (Ctrl / Shift). You can also drop models onto the window." if library != "material" else "")
+			if library != "material":
+				_row(head, "+ Import a folder of models...", {"type": "action", "library": library, "path": "", "folder": true}, ACTION_COLOR).set_tooltip_text(0,
+					"A whole model pack: every .glb / .gltf in it (and its subfolders), with one set of settings.")
 		# Hide folders the search left empty.
 		if filter != "":
 			for path in folders:
@@ -171,7 +175,10 @@ func _on_selected() -> void:
 			app.begin_place(meta.entry)
 		"action":
 			_tree.deselect_all.call_deferred()
-			_new_in(String(meta.library), String(meta.path))
+			if meta.get("folder", false):
+				app.dialogs.import_folder(String(meta.library), String(meta.path))
+			else:
+				_new_in(String(meta.library), String(meta.path))
 		"start":
 			_tree.deselect_all.call_deferred()
 			app.doc.select(EditorDoc.START)
@@ -223,7 +230,9 @@ func _open_menu(it: TreeItem, meta: Dictionary) -> void:
 			var path := String(meta.get("path", ""))
 			if library != "":
 				_item("New folder here..." if meta.type == "folder" else "New folder...", func() -> void: _new_folder(library, path))
-				_item("Import a model here..." if library != "material" else "New material from an image here...", func() -> void: _new_in(library, path))
+				_item("Import models here..." if library != "material" else "New material from an image here...", func() -> void: _new_in(library, path))
+				if library != "material":
+					_item("Import a folder of models here...", func() -> void: app.dialogs.import_folder(library, path))
 				if library == "material":
 					_item("New plain-color material here...", func() -> void: app.dialogs.material_dialog("", "", path))
 			if meta.type == "folder":
