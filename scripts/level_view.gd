@@ -30,6 +30,14 @@ var doc: EditorDoc
 var show_all_layers := true
 var show_wires := true
 var show_nav := true
+## View > Show the selected piece's hitbox: its collision as thin lines.
+var show_hitbox := false
+
+const HITBOX_COLOR := Color(0.4, 1.0, 0.85)
+const OUTLINE_SHADER := preload("res://shaders/selection_outline.gdshader")
+## The outline copy of a mesh (smoothed normals), by the mesh's instance id.
+var _outline_meshes := {}
+var _outline_mat: ShaderMaterial
 ## Orthographic camera (the top view is always orthographic).
 var ortho := false
 ## Layer 1: clicks pick rooms (navmesh) instead of pieces.
@@ -255,10 +263,11 @@ func refresh_overlay() -> void:
   if it.is_empty() or it.kind == "area":
     return
   var box := Items.local_aabb(it.kind, it.data, doc.level).grow(0.05)
-  var outline := ItemVisuals.lines(ItemVisuals.box_edges(box), Color(1.0, 0.9, 0.2), true)
-  outline.transform = Items.xform(it.kind, it.data)
-  _overlay.add_child(outline)
-  if it.kind == "piece":
+  var bounds := ItemVisuals.lines(ItemVisuals.box_edges(box), Color(1.0, 0.9, 0.2), true)
+  bounds.transform = Items.xform(it.kind, it.data)
+  _overlay.add_child(bounds)
+  _outline(_nodes.get(doc.selected))
+  if it.kind == "piece" and show_hitbox:
     _show_hitbox(it.data)
   if it.kind == "enemy":
     var at := Items.get_pos(it.kind, it.data) + Vector3(0, 0.08, 0)
@@ -272,21 +281,91 @@ func refresh_overlay() -> void:
     _ring(at, aggro, Color(0.6, 0.75, 1.0, 0.5))
 
 
-## The selected piece's collision, as Godot builds it (the game builds the same).
+## The selected item's white outline: every mesh in its node gets an
+## inverted-hull copy (selection_outline.gdshader) in the overlay.
+func _outline(node: Node3D) -> void:
+  if node == null or not is_instance_valid(node):
+    return
+  if _outline_mat == null:
+    _outline_mat = ShaderMaterial.new()
+    _outline_mat.shader = OUTLINE_SHADER
+  for mi in node.find_children("*", "MeshInstance3D", true, false):
+    var src := mi as MeshInstance3D
+    if src.mesh == null or not src.is_visible_in_tree() or src.mesh is ImmediateMesh:
+      continue
+    var hull := MeshInstance3D.new()
+    hull.mesh = outline_mesh(src.mesh)
+    hull.material_override = _outline_mat
+    hull.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    hull.transform = src.global_transform
+    _overlay.add_child(hull)
+
+
+## A copy of a mesh for outlining: triangles only, with each vertex's normal
+## averaged over every face meeting at that point, so pushing the hull out
+## along them leaves no gaps at hard corners. Cached per mesh; very large
+## meshes keep their own normals.
+func outline_mesh(mesh: Mesh) -> Mesh:
+  var key := mesh.get_instance_id()
+  if _outline_meshes.has(key):
+    return _outline_meshes[key]
+  var out := ArrayMesh.new()
+  for s in mesh.get_surface_count():
+    if mesh is ArrayMesh and (mesh as ArrayMesh).surface_get_primitive_type(s) != Mesh.PRIMITIVE_TRIANGLES:
+      continue
+    var arrays := mesh.surface_get_arrays(s)
+    var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+    var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+    if verts.is_empty():
+      continue
+    if normals.size() != verts.size():
+      normals.resize(verts.size())
+    if verts.size() <= 120000:
+      var sums := {}
+      for i in verts.size():
+        var at := verts[i].snapped(Vector3.ONE * 0.0005)
+        sums[at] = sums.get(at, Vector3.ZERO) + normals[i]
+      for i in verts.size():
+        var n: Vector3 = sums[verts[i].snapped(Vector3.ONE * 0.0005)]
+        normals[i] = n.normalized() if n.length() > 0.0001 else normals[i]
+    var kept := []
+    kept.resize(Mesh.ARRAY_MAX)
+    kept[Mesh.ARRAY_VERTEX] = verts
+    kept[Mesh.ARRAY_NORMAL] = normals
+    kept[Mesh.ARRAY_INDEX] = arrays[Mesh.ARRAY_INDEX]
+    out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, kept)
+  if _outline_meshes.size() > 512:
+    _outline_meshes.clear()
+  _outline_meshes[key] = out
+  return out
+
+
+## The selected piece's collision, as Godot builds it (the game builds the
+## same), as thin lines through everything (View > Show the selected piece's
+## hitbox).
 func _show_hitbox(d: Dictionary) -> void:
   var hit := LevelNav.hitbox(d, doc.level, doc.model_loader())
-  var mat := StandardMaterial3D.new()
-  mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-  mat.albedo_color = Color(0.4, 1.0, 0.85, 0.55)
-  mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-  mat.no_depth_test = true
   for pair in hit.shapes:
-    var mi := MeshInstance3D.new()
-    mi.mesh = (pair[0] as Shape3D).get_debug_mesh()
-    mi.material_override = mat
-    mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-    mi.transform = (hit.xform as Transform3D) * (pair[1] as Transform3D)
-    _overlay.add_child(mi)
+    var debug := (pair[0] as Shape3D).get_debug_mesh()
+    var edges := PackedVector3Array()
+    for s in debug.get_surface_count():
+      var arrays := debug.surface_get_arrays(s)
+      var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+      var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
+      var order: Array = Array(idx) if not idx.is_empty() else range(v.size())
+      if debug is ArrayMesh and (debug as ArrayMesh).surface_get_primitive_type(s) == Mesh.PRIMITIVE_LINES:
+        for i in order:
+          edges.append(v[i])
+      else:
+        for t in range(0, order.size() - 2, 3):
+          for e in [[0, 1], [1, 2], [2, 0]]:
+            edges.append(v[order[t + e[0]]])
+            edges.append(v[order[t + e[1]]])
+    if edges.is_empty():
+      continue
+    var wire := ItemVisuals.lines(edges, HITBOX_COLOR, true)
+    wire.transform = (hit.xform as Transform3D) * (pair[1] as Transform3D)
+    _overlay.add_child(wire)
 
 
 func _ring(at: Vector3, radius: float, color: Color) -> void:

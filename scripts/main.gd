@@ -160,12 +160,14 @@ func _build() -> void:
     ["Show the other layers' things", func() -> void: _toggle_view_option(1)],
     ["Show trigger lines", func() -> void: _toggle_view_option(2)],
     ["Show the navmesh", func() -> void: _toggle_view_option(3)],
-    ["Orthographic   O", func() -> void: set_ortho(not view.ortho)], [],
+    ["Orthographic   O", func() -> void: set_ortho(not view.ortho)],
+    ["Show the selected piece's hitbox", func() -> void: _toggle_view_option(5)], [],
     ["Show the whole level", func() -> void: view.focus("")]])
-  for i in 5:
+  for i in 6:
     _view_menu.set_item_as_checkable(i, true)
   for i in [1, 2, 3]:
     _view_menu.set_item_checked(i, true)
+  _view_menu.set_item_checked(5, bool(AppSettings.get_value("show_hitbox", false)))
   _menu(bar, "Help", [["Controls", func() -> void: dialogs.tell("Controls", CONTROLS)],
     ["Open the starter example", func() -> void: dialogs.leave_level(open_example)],
     ["About layers", func() -> void: dialogs.tell("The three layers", "\n\n".join(Catalog.LAYER_HELP.values()))]])
@@ -266,6 +268,7 @@ func _build() -> void:
   right_split.add_child(middle)
   view = LevelView.new()
   view.app = self
+  view.show_hitbox = bool(AppSettings.get_value("show_hitbox", false))
   view.hint.connect(func(text: String) -> void: _set_hint(text))
   view.placed.connect(func(_id: String) -> void: pass)
   middle.add_child(view)
@@ -551,6 +554,11 @@ func _toggle_view_option(index: int) -> void:
     view.show_all_layers = on
   elif index == 2:
     view.show_wires = on
+  elif index == 5:
+    view.show_hitbox = on
+    AppSettings.set_value("show_hitbox", on)
+    view.refresh_overlay()
+    return
   else:
     view.show_nav = on
     view.refresh_nav()

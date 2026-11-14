@@ -35,6 +35,27 @@ func drag(from: Vector2, to: Vector2) -> void:
     await mouse(from.lerp(to, k / 10.0))
   await mouse(to, MOUSE_BUTTON_LEFT, false)
 
+func outline_hulls() -> Array:
+  var found := []
+  for n in app.view._overlay.get_children():
+    var mi := n as MeshInstance3D
+    if mi != null and mi.material_override is ShaderMaterial and (mi.material_override as ShaderMaterial).shader == LevelView.OUTLINE_SHADER:
+      found.append(mi)
+  return found
+
+
+func hitbox_lines() -> int:
+  var count := 0
+  for n in app.view._overlay.get_children():
+    var mi := n as MeshInstance3D
+    if mi == null or not mi.mesh is ImmediateMesh or mi.mesh.get_surface_count() == 0:
+      continue
+    var mat := mi.mesh.surface_get_material(0) as StandardMaterial3D
+    if mat != null and mat.albedo_color == LevelView.HITBOX_COLOR:
+      count += 1
+  return count
+
+
 func _point(g: TransformGizmo, handle: String) -> Vector3:
   for p in g._points:
     if p.handle == handle:
@@ -59,6 +80,23 @@ func _init() -> void:
   app.view._update_camera()
   for i in 5:
     await process_frame
+  # The selection is a white outline, not a filled hitbox.
+  var hulls := outline_hulls()
+  check(hulls.size() == 1, "the selected box gets one outline hull (%d)" % hulls.size())
+  check(hulls.size() == 1 and hulls[0].mesh.get_surface_count() > 0, "the hull has the box's triangles")
+  check(not app.view.show_hitbox and hitbox_lines() == 0, "no hitbox is drawn by default")
+  app._toggle_view_option(5)
+  await process_frame
+  check(app.view.show_hitbox and hitbox_lines() > 0, "View > Show the selected piece's hitbox draws it as lines")
+  check(outline_hulls().size() == 1, "and the outline stays")
+  app._toggle_view_option(5)
+  await process_frame
+  check(hitbox_lines() == 0, "turning it off hides it again")
+  doc.select("")
+  await process_frame
+  check(outline_hulls().is_empty(), "nothing selected, no outline")
+  doc.select(id)
+  await process_frame
   var g: TransformGizmo = app.view.gizmo
   g._process(0)
   var s := g.scale.x
