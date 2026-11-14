@@ -84,6 +84,8 @@ func _init() -> void:
   var hulls := outline_hulls()
   check(hulls.size() == 1, "the selected box gets one outline hull (%d)" % hulls.size())
   check(hulls.size() == 1 and hulls[0].mesh.get_surface_count() > 0, "the hull has the box's triangles")
+  var masks: Array = app.view._overlay.get_children().filter(func(n): return n is MeshInstance3D and n.material_override is ShaderMaterial and n.material_override.shader == LevelView.MASK_SHADER)
+  check(masks.size() == 1, "and a stencil mask, so the outline only goes round it")
   check(not app.view.show_hitbox and hitbox_lines() == 0, "no hitbox is drawn by default")
   app._toggle_view_option(5)
   await process_frame

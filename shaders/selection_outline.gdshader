@@ -1,11 +1,14 @@
-// The selected item's outline (Grayson 2026-11-14): an inverted hull. The
-// mesh's back faces are drawn pushed outward along their normals, in a solid
-// colour, so a band shows around the silhouette. The push is in screen space,
-// so the line is the same number of pixels thick near and far, and in the
+// The selected item's outline (Grayson 2026-11-14). A copy of each mesh is
+// pushed outward along its normals and drawn in a solid colour, but only where
+// the stencil mask (selection_mask.gdshader) didn't mark the item itself, so
+// what's left is a band round its silhouette. It draws through other things,
+// so a piece sunk in the floor or behind a wall still shows where it is. The
+// push is in screen space: the same number of pixels near and far, and in the
 // orthographic view. LevelView feeds it a copy of the mesh with smoothed
 // normals, so boxes and stairs don't split at their corners.
 shader_type spatial;
-render_mode unshaded, cull_front, shadows_disabled, fog_disabled;
+render_mode unshaded, cull_disabled, depth_draw_never, depth_test_disabled, shadows_disabled, fog_disabled;
+stencil_mode read, compare_not_equal, 1;
 
 uniform vec4 outline_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 // Thickness in pixels.
@@ -23,4 +26,5 @@ void vertex() {
 
 void fragment() {
   ALBEDO = outline_color.rgb;
+  ALPHA = outline_color.a;
 }

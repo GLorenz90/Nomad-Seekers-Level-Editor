@@ -35,9 +35,11 @@ var show_hitbox := false
 
 const HITBOX_COLOR := Color(0.4, 1.0, 0.85)
 const OUTLINE_SHADER := preload("res://shaders/selection_outline.gdshader")
+const MASK_SHADER := preload("res://shaders/selection_mask.gdshader")
 ## The outline copy of a mesh (smoothed normals), by the mesh's instance id.
 var _outline_meshes := {}
 var _outline_mat: ShaderMaterial
+var _mask_mat: ShaderMaterial
 ## Orthographic camera (the top view is always orthographic).
 var ortho := false
 ## Layer 1: clicks pick rooms (navmesh) instead of pieces.
@@ -281,18 +283,30 @@ func refresh_overlay() -> void:
     _ring(at, aggro, Color(0.6, 0.75, 1.0, 0.5))
 
 
-## The selected item's white outline: every mesh in its node gets an
-## inverted-hull copy (selection_outline.gdshader) in the overlay.
+## The selected item's white outline. Every mesh in its node gets two copies in
+## the overlay: one marks its pixels in the stencil buffer
+## (selection_mask.gdshader), then a pushed-out one draws white everywhere
+## else (selection_outline.gdshader), leaving a band round the silhouette.
 func _outline(node: Node3D) -> void:
   if node == null or not is_instance_valid(node):
     return
   if _outline_mat == null:
+    _mask_mat = ShaderMaterial.new()
+    _mask_mat.shader = MASK_SHADER
+    _mask_mat.render_priority = 10
     _outline_mat = ShaderMaterial.new()
     _outline_mat.shader = OUTLINE_SHADER
+    _outline_mat.render_priority = 11
   for mi in node.find_children("*", "MeshInstance3D", true, false):
     var src := mi as MeshInstance3D
     if src.mesh == null or not src.is_visible_in_tree() or src.mesh is ImmediateMesh:
       continue
+    var mask := MeshInstance3D.new()
+    mask.mesh = src.mesh
+    mask.material_override = _mask_mat
+    mask.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    mask.transform = src.global_transform
+    _overlay.add_child(mask)
     var hull := MeshInstance3D.new()
     hull.mesh = outline_mesh(src.mesh)
     hull.material_override = _outline_mat
@@ -303,8 +317,10 @@ func _outline(node: Node3D) -> void:
 
 ## A copy of a mesh for outlining: triangles only, with each vertex's normal
 ## averaged over every face meeting at that point, so pushing the hull out
-## along them leaves no gaps at hard corners. Cached per mesh; very large
-## meshes keep their own normals.
+## along them leaves no gaps at hard corners. On open edges (a cut-off wall, a
+## one-sided cave piece) the push also leans out past the edge, so the outline
+## goes round those too. Cached per mesh; very large meshes keep their own
+## normals.
 func outline_mesh(mesh: Mesh) -> Mesh:
   var key := mesh.get_instance_id()
   if _outline_meshes.has(key):
@@ -315,29 +331,78 @@ func outline_mesh(mesh: Mesh) -> Mesh:
       continue
     var arrays := mesh.surface_get_arrays(s)
     var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-    var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+    var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL] if arrays[Mesh.ARRAY_NORMAL] != null else PackedVector3Array()
     if verts.is_empty():
       continue
     if normals.size() != verts.size():
       normals.resize(verts.size())
+    var index: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
     if verts.size() <= 120000:
-      var sums := {}
-      for i in verts.size():
-        var at := verts[i].snapped(Vector3.ONE * 0.0005)
-        sums[at] = sums.get(at, Vector3.ZERO) + normals[i]
-      for i in verts.size():
-        var n: Vector3 = sums[verts[i].snapped(Vector3.ONE * 0.0005)]
-        normals[i] = n.normalized() if n.length() > 0.0001 else normals[i]
+      normals = _outline_normals(verts, normals, index)
     var kept := []
     kept.resize(Mesh.ARRAY_MAX)
     kept[Mesh.ARRAY_VERTEX] = verts
     kept[Mesh.ARRAY_NORMAL] = normals
-    kept[Mesh.ARRAY_INDEX] = arrays[Mesh.ARRAY_INDEX]
+    if not index.is_empty():
+      kept[Mesh.ARRAY_INDEX] = index
     out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, kept)
   if _outline_meshes.size() > 512:
     _outline_meshes.clear()
   _outline_meshes[key] = out
   return out
+
+
+## The push direction for each vertex of an outline copy (see outline_mesh).
+static func _outline_normals(verts: PackedVector3Array, normals: PackedVector3Array, index: PackedInt32Array) -> PackedVector3Array:
+  # Weld: one id per position, so split corners and UV seams count as one.
+  var ids := {}
+  var weld := PackedInt32Array()
+  weld.resize(verts.size())
+  for i in verts.size():
+    var at := verts[i].snapped(Vector3.ONE * 0.0005)
+    if not ids.has(at):
+      ids[at] = ids.size()
+    weld[i] = ids[at]
+  var push := PackedVector3Array()
+  push.resize(ids.size())
+  for i in verts.size():
+    push[weld[i]] += normals[i]
+  # Open edges: an edge only one triangle uses. Lean its ends out past it,
+  # across the triangle's own surface.
+  var tri_count := floori(index.size() / 3.0) if not index.is_empty() else floori(verts.size() / 3.0)
+  var edges := {}
+  var span := ids.size()
+  for t in tri_count:
+    for e in 3:
+      var a := index[t * 3 + e] if not index.is_empty() else t * 3 + e
+      var b := index[t * 3 + (e + 1) % 3] if not index.is_empty() else t * 3 + (e + 1) % 3
+      var c := index[t * 3 + (e + 2) % 3] if not index.is_empty() else t * 3 + (e + 2) % 3
+      var wa := weld[a]
+      var wb := weld[b]
+      if wa == wb:
+        continue
+      var k := mini(wa, wb) * span + maxi(wa, wb)
+      if edges.has(k):
+        edges[k] = -1
+      else:
+        edges[k] = [a, b, c]
+  for k in edges:
+    var tri = edges[k]
+    if tri is int:
+      continue
+    var pa := verts[tri[0]]
+    var pb := verts[tri[1]]
+    var along := (pb - pa).normalized()
+    var away := pa - verts[tri[2]]
+    away = (away - along * away.dot(along)).normalized()
+    push[weld[tri[0]]] += away
+    push[weld[tri[1]]] += away
+  var result := PackedVector3Array()
+  result.resize(verts.size())
+  for i in verts.size():
+    var n := push[weld[i]]
+    result[i] = n.normalized() if n.length() > 0.0001 else normals[i]
+  return result
 
 
 ## The selected piece's collision, as Godot builds it (the game builds the

@@ -107,8 +107,10 @@ it makes the level compliant. Its `BUILD_LOG.md` lists each step.
    override them on any one placed copy. To see a selected piece's hitbox, turn on
    View > Show the selected piece's hitbox: it's drawn as cyan lines, exactly what the game builds.
 
-   Whatever you select gets a white outline round its shape (and a thin yellow box round its
-   bounds), so you can still see its own colours and textures while you work on it.
+   Whatever you select gets a white outline round its silhouette (and a thin yellow box round its
+   bounds), so you can still see its own colours and textures while you work on it. The outline
+   shows through walls and floors, so a piece sunk into the ground or hidden behind something
+   still shows where it is, and it works on open, one-sided models like scanned cave walls.
 4. **Rooms come from the navmesh.** The navmesh is sized for a Seeker (0.4 m radius) and rebakes a
    moment after each change. Each separate piece of it is a room, in its own color: the first is
    blue, and a newly split-off one gets a new color.
