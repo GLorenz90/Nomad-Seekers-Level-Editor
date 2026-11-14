@@ -1,12 +1,14 @@
-# Godot's script editor indents with tabs; keep every editor doing the same
-# (mixing tabs and spaces in a .gd file is a parse error).
+# Grayson's code style (2026-11-14): CRLF line endings and 2-space indents.
+# Set Godot to match: Editor Settings > Text Editor > Behavior > Indent:
+# Type "Spaces", Size 2 (with "Convert Indent on Save" on). Mixing tabs and
+# spaces in one .gd file is a parse error.
 root = true
 
 [*]
 charset = utf-8
-end_of_line = lf
+end_of_line = crlf
 insert_final_newline = true
 
 [*.gd]
-indent_style = tab
-indent_size = 4
+indent_style = space
+indent_size = 2
