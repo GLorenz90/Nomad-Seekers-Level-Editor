@@ -47,6 +47,7 @@ var place_wave := 1
 var view: LevelView
 var dialogs: Dialogs
 var quests: QuestDialogs
+var _window_saver: Timer
 var palette: Palette
 var outline: Outline
 var inspector: Inspector
@@ -92,6 +93,14 @@ func _ready() -> void:
 	_refresh_all()
 	# Models (or a folder of them, or an image) dropped from the file manager.
 	get_window().files_dropped.connect(func(paths: PackedStringArray) -> void: dialogs.files_dropped(paths))
+	# Resizes like other editors; remembers its size and place (WindowPlacement).
+	WindowPlacement.restore(get_window())
+	_window_saver = Timer.new()
+	_window_saver.one_shot = true
+	_window_saver.wait_time = 0.6
+	_window_saver.timeout.connect(func() -> void: WindowPlacement.save(get_window()))
+	add_child(_window_saver)
+	get_window().size_changed.connect(func() -> void: _window_saver.start())
 	var open_dir := ""
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--open="):
@@ -104,6 +113,7 @@ func _ready() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		WindowPlacement.save(get_window())
 		dialogs.leave_level(func() -> void: get_tree().quit())
 
 

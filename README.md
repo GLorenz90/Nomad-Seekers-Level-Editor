@@ -9,6 +9,10 @@ rooms, and each room gets its own color.
 
 ![Rooms on the navmesh](docs/screenshots/navmesh_rooms.png)
 
+**The window** resizes like any editor, and the layout follows it. The first time, it opens maximized. After that it comes back at the size and place you left it, or maximized if you left it maximized. Its smallest size is 1024 × 600.
+
+> **Running it from Godot (F5)?** Godot 4.4 and later run projects inside the editor's **Game** tab, which keeps them at the project's 1600 × 900 by default. In the Game tab's bar, open the window-size menu and choose **Stretch to Fit**, or untick **Embed Game on Next Play** to run it in its own window.
+
 ## Starter example
 
 **Help > Open the starter example** (or the button on the welcome screen) opens your own copy of
