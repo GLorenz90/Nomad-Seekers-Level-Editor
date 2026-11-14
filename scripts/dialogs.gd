@@ -194,6 +194,17 @@ func welcome() -> void:
 		app.open_example())
 	buttons.add_child(example_button)
 	box.add_child(buttons)
+	box.add_child(_label("Or build a quest: its people and props on Nomad-2, its steps, and where the teleporter goes while it's on.", true))
+	var quest_buttons := HBoxContainer.new()
+	for spec in [["New quest...", "new_quest"], ["Open a quest folder...", "open_quest"]]:
+		var b := Button.new()
+		b.text = spec[0]
+		var method: String = spec[1]
+		b.pressed.connect(func() -> void:
+			dialog.queue_free()
+			app.quests.call(method))
+		quest_buttons.add_child(b)
+	box.add_child(quest_buttons)
 	var levels := library_levels()
 	if not levels.is_empty():
 		box.add_child(_label("Your levels (double-click to open)"))
@@ -1226,6 +1237,15 @@ func _new_action(action: String) -> Dictionary:
 			a.amount = 100
 		"complete_objective":
 			a.key = ""
+		"set_quest_flag":
+			a.flag = ""
+			a.value = true
+		"take_item":
+			a.item = "hp_gel"
+			a.amount = 1
+		"set_talk":
+			var dialogues := Wiring.candidates("dialogue", _doc())
+			a.dialogue = dialogues[0][0] if not dialogues.is_empty() else ""
 	return a
 
 
@@ -1279,7 +1299,7 @@ func _action_row(actions: Array, i: int, touch: Callable) -> Control:
 			row.add_child(seconds)
 		"banner":
 			row.add_child(_text(a, "text", "What it says", touch))
-		"set_flag":
+		"set_flag", "set_quest_flag":
 			row.add_child(_text(a, "flag", "flag name", touch))
 			var value := CheckBox.new()
 			value.text = "on"
@@ -1290,32 +1310,19 @@ func _action_row(actions: Array, i: int, touch: Callable) -> Control:
 			row.add_child(value)
 		"complete_objective":
 			row.add_child(_text(a, "key", "the quest's objective key", touch))
-		"give_item":
-			var item := _options([["oro", "Oro"], ["hp_gel", "HP Gel"], ["lp_cell", "LP Cell"], ["cure_salt", "Cure Salt"],
-				["trap_scanner", "Trap Scanner"], ["lumidium", "Lumidium"]], String(a.get("item", "oro")))
-			item.item_selected.connect(func(index: int) -> void:
-				a.item = item.get_item_metadata(index)
-				if String(a.item) == "lumidium":
-					a.color = "raw"
-				else:
-					a.erase("color")
-				_fill_rule())
-			row.add_child(item)
-			if String(a.get("item", "")) == "lumidium":
-				var colors := []
-				for c in LevelData.LUMIDIUM_COLORS:
-					colors.append([c, String(c).capitalize()])
-				var color := _options(colors, String(a.get("color", "raw")))
-				color.item_selected.connect(func(index: int) -> void: a.color = color.get_item_metadata(index))
-				row.add_child(color)
-			var amount := SpinBox.new()
-			amount.min_value = 1
-			amount.max_value = 99999
-			amount.value = float(a.get("amount", 1))
-			amount.value_changed.connect(func(v: float) -> void:
-				a.amount = int(v)
+		"give_item", "take_item":
+			_item_controls(row, a, touch)
+		"set_talk":
+			var dialogues := Wiring.candidates("dialogue", doc)
+			if dialogues.is_empty():
+				dialogues = [["", "(make a dialogue first)"]]
+			var said := _options(dialogues, String(a.get("dialogue", "")))
+			said.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			said.clip_text = true
+			said.item_selected.connect(func(index: int) -> void:
+				a.dialogue = said.get_item_metadata(index)
 				touch.call())
-			row.add_child(amount)
+			row.add_child(said)
 	if i > 0:
 		var up := Button.new()
 		up.text = "Up"
@@ -1336,16 +1343,51 @@ func _action_row(actions: Array, i: int, touch: Callable) -> Control:
 	return row
 
 
+## Item, Lumidium colour and amount (give_item, take_item, has_item).
+func _item_controls(row: HBoxContainer, a: Dictionary, touch: Callable) -> void:
+	var item := _options(Wiring.ITEMS, String(a.get("item", "oro")))
+	item.item_selected.connect(func(index: int) -> void:
+		a.item = item.get_item_metadata(index)
+		if String(a.item) == "lumidium":
+			a.color = "raw"
+		else:
+			a.erase("color")
+		_fill_rule())
+	row.add_child(item)
+	if String(a.get("item", "")) == "lumidium":
+		var colors := []
+		for c in LevelData.LUMIDIUM_COLORS:
+			colors.append([c, String(c).capitalize()])
+		var color := _options(colors, String(a.get("color", "raw")))
+		color.item_selected.connect(func(index: int) -> void:
+			a.color = color.get_item_metadata(index)
+			touch.call())
+		row.add_child(color)
+	var amount := SpinBox.new()
+	amount.min_value = 1
+	amount.max_value = 99999
+	amount.value = float(a.get("amount", 1))
+	amount.value_changed.connect(func(v: float) -> void:
+		a.amount = int(v)
+		touch.call())
+	row.add_child(amount)
+
+
 func _condition_row(checks: Array, i: int, touch: Callable) -> Control:
+	var doc := _doc()
 	var c: Dictionary = checks[i]
 	var row := HBoxContainer.new()
-	var pick := _options([["flag", "A flag is"], ["party_at_least", "The party has at least"],
-		["difficulty_at_least", "The difficulty is at least"], ["quest_active", "This quest is active"]], String(c.get("check", "flag")))
+	var kinds := [["flag", "A flag is"], ["party_at_least", "The party has at least"],
+		["difficulty_at_least", "The difficulty is at least"], ["quest_active", "This quest is active"],
+		["has_item", "The Seeker who talked has"]]
+	if doc.quest:
+		kinds.append_array([["quest_step", "Quest step"], ["quest_flag", "A quest flag is"], ["escort_near", "An escort is near"]])
+	var pick := _options(kinds, String(c.get("check", "flag")))
 	pick.item_selected.connect(func(index: int) -> void:
 		var check := String(pick.get_item_metadata(index))
 		checks[i] = {"check": check}
 		match check:
-			"flag":
+			"flag", "quest_flag":
 				checks[i].merge({"flag": "", "is": true})
 			"party_at_least":
 				checks[i].value = 2
@@ -1353,8 +1395,76 @@ func _condition_row(checks: Array, i: int, touch: Callable) -> Control:
 				checks[i].value = "hard"
 			"quest_active":
 				checks[i].value = ""
+			"has_item":
+				checks[i].merge({"item": "hp_gel", "amount": 1, "is": true})
+			"quest_step":
+				var steps := Wiring.candidates("step", doc)
+				checks[i].merge({"step": steps[0][0] if not steps.is_empty() else "", "is": "done"})
+			"escort_near":
+				var people := Wiring.candidates("escort", doc)
+				checks[i].merge({"target": people[0][0] if not people.is_empty() else "", "distance": 8.0, "is": true})
 		_fill_rule())
 	row.add_child(pick)
+	match String(c.get("check", "")):
+		"quest_flag":
+			row.add_child(_text(c, "flag", "flag name", touch))
+			var on := CheckBox.new()
+			on.text = "on"
+			on.button_pressed = bool(c.get("is", true))
+			on.toggled.connect(func(v: bool) -> void:
+				c["is"] = v
+				touch.call())
+			row.add_child(on)
+		"has_item":
+			_item_controls(row, c, touch)
+			var have := CheckBox.new()
+			have.text = "has it"
+			have.tooltip_text = "Untick for \"doesn't have it\"."
+			have.button_pressed = bool(c.get("is", true))
+			have.toggled.connect(func(v: bool) -> void:
+				c["is"] = v
+				touch.call())
+			row.add_child(have)
+		"quest_step":
+			var steps := Wiring.candidates("step", doc)
+			var step_pick := _options(steps if not steps.is_empty() else [["", "(no steps yet)"]], String(c.get("step", "")))
+			step_pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			step_pick.clip_text = true
+			step_pick.item_selected.connect(func(index: int) -> void:
+				c.step = step_pick.get_item_metadata(index)
+				touch.call())
+			row.add_child(step_pick)
+			var state := _options([["done", "is done"], ["current", "is the current step"], ["not_done", "isn't done yet"]], String(c.get("is", "done")))
+			state.item_selected.connect(func(index: int) -> void:
+				c["is"] = state.get_item_metadata(index)
+				touch.call())
+			row.add_child(state)
+		"escort_near":
+			var people := Wiring.candidates("escort", doc)
+			var who := _options(people if not people.is_empty() else [["", "(nobody to escort)"]], String(c.get("target", "")))
+			who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			who.clip_text = true
+			who.item_selected.connect(func(index: int) -> void:
+				c.target = who.get_item_metadata(index)
+				touch.call())
+			row.add_child(who)
+			var within := SpinBox.new()
+			within.min_value = 1
+			within.max_value = 50
+			within.suffix = "m"
+			within.value = float(c.get("distance", 8.0))
+			within.value_changed.connect(func(v: float) -> void:
+				c.distance = v
+				touch.call())
+			row.add_child(within)
+			var near := CheckBox.new()
+			near.text = "near"
+			near.tooltip_text = "Untick for \"not near\" (left behind)."
+			near.button_pressed = bool(c.get("is", true))
+			near.toggled.connect(func(v: bool) -> void:
+				c["is"] = v
+				touch.call())
+			row.add_child(near)
 	match String(c.get("check", "")):
 		"flag":
 			row.add_child(_text(c, "flag", "flag name", touch))

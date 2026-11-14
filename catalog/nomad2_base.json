@@ -1,0 +1,356 @@
+{
+	"format": 1,
+	"source": "res://scenes/hub.tscn",
+	"pieces": [
+		{
+			"id": "nomad2_floor",
+			"name": "Floor",
+			"asset": "builtin:box",
+			"size": [
+				32.0,
+				1.0,
+				30.0
+			],
+			"pos": [
+				0.0,
+				-1.0,
+				0.0
+			],
+			"yaw": 0.0,
+			"color": [
+				0.32,
+				0.36,
+				0.42
+			],
+			"surface": "floor"
+		},
+		{
+			"id": "nomad2_wall_north",
+			"name": "Wall North",
+			"asset": "builtin:box",
+			"size": [
+				32.0,
+				5.0,
+				1.0
+			],
+			"pos": [
+				0.0,
+				0.0,
+				-15.5
+			],
+			"yaw": 0.0,
+			"color": [
+				0.22,
+				0.26,
+				0.36
+			],
+			"surface": "obstacle"
+		},
+		{
+			"id": "nomad2_wall_south",
+			"name": "Wall South",
+			"asset": "builtin:box",
+			"size": [
+				32.0,
+				5.0,
+				1.0
+			],
+			"pos": [
+				0.0,
+				0.0,
+				15.5
+			],
+			"yaw": 0.0,
+			"color": [
+				0.22,
+				0.26,
+				0.36
+			],
+			"surface": "obstacle"
+		},
+		{
+			"id": "nomad2_wall_west",
+			"name": "Wall West",
+			"asset": "builtin:box",
+			"size": [
+				1.0,
+				5.0,
+				30.0
+			],
+			"pos": [
+				-16.5,
+				0.0,
+				0.0
+			],
+			"yaw": 0.0,
+			"color": [
+				0.22,
+				0.26,
+				0.36
+			],
+			"surface": "obstacle"
+		},
+		{
+			"id": "nomad2_wall_east",
+			"name": "Wall East",
+			"asset": "builtin:box",
+			"size": [
+				1.0,
+				5.0,
+				30.0
+			],
+			"pos": [
+				16.5,
+				0.0,
+				0.0
+			],
+			"yaw": 0.0,
+			"color": [
+				0.22,
+				0.26,
+				0.36
+			],
+			"surface": "obstacle"
+		},
+		{
+			"id": "nomad2_guild_counter",
+			"name": "Guild Counter",
+			"asset": "builtin:box",
+			"size": [
+				3.0,
+				1.1,
+				5.0
+			],
+			"pos": [
+				-13.0,
+				0.0,
+				-6.0
+			],
+			"yaw": 0.0,
+			"color": [
+				0.45,
+				0.4,
+				0.3
+			],
+			"surface": "obstacle"
+		},
+		{
+			"id": "nomad2_bank_counter",
+			"name": "Bank Counter",
+			"asset": "builtin:box",
+			"size": [
+				3.0,
+				1.1,
+				5.0
+			],
+			"pos": [
+				-13.0,
+				0.0,
+				3.0
+			],
+			"yaw": 0.0,
+			"color": [
+				0.45,
+				0.4,
+				0.3
+			],
+			"surface": "obstacle"
+		},
+		{
+			"id": "nomad2_weapons_counter",
+			"name": "Weapons Counter",
+			"asset": "builtin:box",
+			"size": [
+				3.0,
+				1.1,
+				5.0
+			],
+			"pos": [
+				13.0,
+				0.0,
+				-8.0
+			],
+			"yaw": 0.0,
+			"color": [
+				0.45,
+				0.4,
+				0.3
+			],
+			"surface": "obstacle"
+		},
+		{
+			"id": "nomad2_armor_counter",
+			"name": "Armor Counter",
+			"asset": "builtin:box",
+			"size": [
+				3.0,
+				1.1,
+				5.0
+			],
+			"pos": [
+				13.0,
+				0.0,
+				-1.0
+			],
+			"yaw": 0.0,
+			"color": [
+				0.45,
+				0.4,
+				0.3
+			],
+			"surface": "obstacle"
+		},
+		{
+			"id": "nomad2_curatives_counter",
+			"name": "Curatives Counter",
+			"asset": "builtin:box",
+			"size": [
+				3.0,
+				1.1,
+				5.0
+			],
+			"pos": [
+				13.0,
+				0.0,
+				6.0
+			],
+			"yaw": 0.0,
+			"color": [
+				0.45,
+				0.4,
+				0.3
+			],
+			"surface": "obstacle"
+		}
+	],
+	"labels": [
+		{
+			"text": "Guild",
+			"pos": [
+				-13.0,
+				2.35,
+				-6.0
+			],
+			"size": 48
+		},
+		{
+			"text": "Bank",
+			"pos": [
+				-13.0,
+				2.35,
+				3.0
+			],
+			"size": 48
+		},
+		{
+			"text": "Weapons",
+			"pos": [
+				13.0,
+				2.35,
+				-8.0
+			],
+			"size": 48
+		},
+		{
+			"text": "Armor",
+			"pos": [
+				13.0,
+				2.35,
+				-1.0
+			],
+			"size": 48
+		},
+		{
+			"text": "Curatives",
+			"pos": [
+				13.0,
+				2.35,
+				6.0
+			],
+			"size": 48
+		},
+		{
+			"text": "NOMAD-2",
+			"pos": [
+				0.0,
+				3.6,
+				-14.9
+			],
+			"size": 120
+		}
+	],
+	"markers": [
+		{
+			"type": "clerk",
+			"name": "Guild Clerk",
+			"pos": [
+				-11.1,
+				0.0,
+				-6.0
+			]
+		},
+		{
+			"type": "clerk",
+			"name": "Bank Clerk",
+			"pos": [
+				-11.1,
+				0.0,
+				3.0
+			]
+		},
+		{
+			"type": "clerk",
+			"name": "Weapons Clerk",
+			"pos": [
+				11.1,
+				0.0,
+				-8.0
+			]
+		},
+		{
+			"type": "clerk",
+			"name": "Armor Clerk",
+			"pos": [
+				11.1,
+				0.0,
+				-1.0
+			]
+		},
+		{
+			"type": "clerk",
+			"name": "Curatives Clerk",
+			"pos": [
+				11.1,
+				0.0,
+				6.0
+			]
+		},
+		{
+			"type": "start",
+			"name": "Player",
+			"pos": [
+				0.0,
+				0.1,
+				10.0
+			]
+		},
+		{
+			"type": "teleporter",
+			"name": "Teleporter",
+			"pos": [
+				0.0,
+				0.0,
+				-10.0
+			]
+		},
+		{
+			"type": "depot",
+			"name": "Lumidium Depot",
+			"pos": [
+				-10.0,
+				0.0,
+				7.5
+			]
+		}
+	]
+}

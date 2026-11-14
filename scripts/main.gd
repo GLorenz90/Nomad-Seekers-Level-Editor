@@ -46,6 +46,7 @@ var place_wave := 1
 
 var view: LevelView
 var dialogs: Dialogs
+var quests: QuestDialogs
 var palette: Palette
 var outline: Outline
 var inspector: Inspector
@@ -83,6 +84,10 @@ func _ready() -> void:
 	dialogs = Dialogs.new()
 	dialogs.app = self
 	add_child(dialogs)
+	quests = QuestDialogs.new()
+	quests.app = self
+	quests.dialogs = dialogs
+	add_child(quests)
 	_build()
 	_refresh_all()
 	var open_dir := ""
@@ -131,6 +136,13 @@ func _build() -> void:
 		["New material from an image...", func() -> void: _need_doc(dialogs.import_material)],
 		["Licenses...", func() -> void: _need_doc(dialogs.licenses)], [],
 		["Playtest in the game   F5", playtest]])
+	_menu(bar, "Quest", [["New quest...", func() -> void: dialogs.leave_level(quests.new_quest)],
+		["Open a quest...", func() -> void: dialogs.leave_level(quests.open_quest)], [],
+		["Quest details...", func() -> void: _need_doc(quests.quest_details)],
+		["The quest's Nomad-2 and levels...", func() -> void: _need_doc(quests.quest_levels)],
+		["New level for this quest...", func() -> void: _need_doc(quests.new_quest_level)], [],
+		["Check and export the quest...", func() -> void: _need_doc(quests.export_current)],
+		["Playtest the quest", func() -> void: _need_doc(quests.playtest)]])
 	_view_menu = _menu(bar, "View", [["Top-down view   Numpad 7", func() -> void: toggle_top()],
 		["Show the other layers' things", func() -> void: _toggle_view_option(1)],
 		["Show trigger lines", func() -> void: _toggle_view_option(2)],
@@ -321,6 +333,7 @@ func _need_doc(then: Callable) -> void:
 
 func set_doc(new_doc: EditorDoc) -> void:
 	doc = new_doc
+	Catalog.quest_steps = doc.quest.step_options() if doc.quest else []
 	doc.changed.connect(_on_changed)
 	doc.selection_changed.connect(_on_selection)
 	AppSettings.add_recent(doc.level.dir)
@@ -471,13 +484,23 @@ func _refresh_bars() -> void:
 			+ ("%d to check" % warnings if warnings > 0 else "")
 		_badge.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5) if errors > 0 else Color(1.0, 0.85, 0.45))
 	var level := doc.level
-	_counts.text = "%s: %d room%s, %d corridor%s    %s   " % [level.size_name(), level.room_count(),
+	_layer_buttons[2].disabled = doc.is_nomad2()
+	var part := ""
+	if doc.quest:
+		part = "Quest \"%s\": %s    " % [doc.quest.title(), "Nomad-2" if doc.is_nomad2() else "its own level"]
+	if doc.is_nomad2():
+		_counts.text = "%s%s   " % [part, "Unsaved changes" if doc.dirty else "Saved"]
+		return
+	_counts.text = "%s%s: %d room%s, %d corridor%s    %s   " % [part, level.size_name(), level.room_count(),
 		"" if level.room_count() == 1 else "s", level.corridor_count(), "" if level.corridor_count() == 1 else "s",
 		"Unsaved changes" if doc.dirty else "Saved"]
 
 
 func set_layer(n: int) -> void:
 	layer = clampi(n, 1, 3)
+	if doc != null and doc.is_nomad2() and layer == 3:
+		layer = 2  # Nomad-2 is peaceful: no Combat layer
+		toast("Nomad-2 is peaceful, so it has no Combat layer.")
 	for i in _layer_buttons.size():
 		_layer_buttons[i].set_pressed_no_signal(i + 1 == layer)
 	_pick_rooms.visible = layer == 1
@@ -590,8 +613,23 @@ func go_to_problem(p: Dictionary) -> void:
 
 # --- Playtest -----------------------------------------------------------------------------------
 
+## The quest was saved (Quest details): its steps and checks catch up.
+func quest_changed() -> void:
+	if doc == null or doc.quest == null:
+		return
+	doc.quest = QuestDoc.open(doc.quest.dir)
+	Catalog.quest_steps = doc.quest.step_options() if doc.quest else []
+	problems = LevelCheck.run(doc)
+	_refresh_all()
+
+
 func playtest() -> void:
-	if doc == null:
+	playtest_with("--level=" + doc.level.dir if doc else "")
+
+
+## Runs the game with `arg` (--level=... or --quest=...).
+func playtest_with(arg: String) -> void:
+	if doc == null or arg == "":
 		return
 	var explicit := String(AppSettings.get_value("run_with", "")) != ""
 	if not AppSettings.has_game() and not explicit:
@@ -604,7 +642,7 @@ func playtest() -> void:
 	var args := PackedStringArray()
 	if AppSettings.has_game():
 		args.append_array(["--path", AppSettings.game_dir()])
-	args.append_array(["--", "--level=" + doc.level.dir])
+	args.append_array(["--", arg])
 	var pid := OS.create_process(AppSettings.run_with(), args)
 	if pid < 0:
 		dialogs.tell("Couldn't start the game", "Running %s didn't work. Check \"Run the game with\" in Settings." % AppSettings.run_with())

@@ -85,6 +85,9 @@ func rebuild() -> void:
 					_zones_section(it.id, d)
 				"platform":
 					_stops_section(it.id, d)
+				"person":
+					_talk_section(it.id, d)
+					_route_section(it.id, d)
 	if kind in ["object", "enemy"] or (kind == "area" and not doc.level.combat_room(it.id).is_empty()):
 		_trigger_section(it.id, kind, d)
 	if kind != "start" and kind != "area":
@@ -100,6 +103,11 @@ func _nothing_selected() -> void:
 	var doc: EditorDoc = app.doc
 	var level := doc.level
 	_title(String(level.meta.get("name", "Untitled")))
+	if doc.is_nomad2():
+		_note("This is what the quest \"%s\" adds to Nomad-2. Nomad-2 itself is drawn but fixed: add people (Interaction layer), props and lights on top. Nomad-2 is peaceful, so there's no Combat layer here." % (doc.quest.title() if doc.quest else "?"))
+		_box.add_child(_button("Quest details...", "Briefing, reward, steps and where the teleporter goes.", func() -> void: app.quests.quest_details()))
+		_box.add_child(_button("The quest's levels...", "Open or make the quest's own levels.", func() -> void: app.quests.quest_levels()))
+		return
 	_note(size_summary(level))
 	_note(Catalog.LAYER_HELP[app.layer])
 	_box.add_child(HSeparator.new())
@@ -535,6 +543,116 @@ func _stops_section(id: String, d: Dictionary) -> void:
 		pts.append(LevelData.arr3(last + Vector3(0, 0, -4)))
 		d.points = pts
 		_commit(id + ":stops", true)))
+
+
+## What a person says: a dialogue, and others that take over once a quest
+## step is done (the last one whose step is done wins).
+func _talk_section(id: String, d: Dictionary) -> void:
+	var doc: EditorDoc = app.doc
+	_section("What they say")
+	var talk: Array = d.get("talk", []) if d.get("talk") is Array else []
+	d.talk = talk
+	var dialogues := [["", "(choose a dialogue)"]]
+	for dl in doc.level.interaction.dialogues:
+		dialogues.append([String(dl.id), doc.label_of(String(dl.id))])
+	if talk.is_empty():
+		_note("Nothing yet. Pick a dialogue they say when a Seeker presses A on them. Make dialogues in the Dialogue tab below.")
+	elif not Catalog.quest_steps.is_empty():
+		_note("Later lines take over as the quest goes on: the last one whose step is done is what they say.")
+	for i in talk.size():
+		var t: Dictionary = talk[i]
+		var row := HBoxContainer.new()
+		var said := _options(dialogues, String(t.get("dialogue", "")), func(v: Variant) -> void:
+			t.dialogue = String(v)
+			_commit(id + ":talk%d" % i))
+		said.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		said.tooltip_text = "What they say."
+		row.add_child(said)
+		row.add_child(_button("X", "Remove this line.", func() -> void:
+			talk.remove_at(i)
+			_commit(id + ":talk", true)))
+		_box.add_child(row)
+		if not Catalog.quest_steps.is_empty():
+			var steps := [["", "From the start"]]
+			for st in Catalog.quest_steps:
+				steps.append([st[0], "Once step %s is done" % st[1]])
+			var when := _options(steps, String(t.get("from_step", "")), func(v: Variant) -> void:
+				if String(v) == "":
+					t.erase("from_step")
+				else:
+					t.from_step = String(v)
+				_commit(id + ":talk%d" % i))
+			when.tooltip_text = "When this takes over."
+			_row("  Says it", when)
+	_box.add_child(_button("Add what they say", "Pick a dialogue for them.", func() -> void:
+		talk.append({"dialogue": String(dialogues[1][0]) if dialogues.size() > 1 else ""})
+		_commit(id + ":talk", true)))
+	_box.add_child(_button("New dialogue for them", "Make a dialogue with them as the speaker, and edit it in the Dialogues tab.", func() -> void:
+		var did := doc.add_dialogue(String(d.get("name", "Someone")))
+		talk.append({"dialogue": did})
+		_commit(id + ":talk", true)
+		app.bottom.show_dialogue(did)))
+
+
+## Where a person walks (when "Walks" is on or a trigger says walk).
+func _route_section(id: String, d: Dictionary) -> void:
+	_section("Walk route")
+	var route: Dictionary = d.get("route", {}) if d.get("route") is Dictionary else {}
+	var pts: Array = route.get("points", [])
+	if pts.is_empty():
+		_note("They stand where they are. Add a route to have them walk between spots.")
+		_box.add_child(_button("Add a route", "Two spots: where they stand and 4 m in front.", func() -> void:
+			var at := LevelData.vec3(d.get("pos"))
+			d.route = {"points": [LevelData.arr3(at), LevelData.arr3(at + Vector3(0, 0, -4))], "mode": "loop", "speed": 1.6, "wait": 2.0}
+			_commit(id + ":route", true)))
+		return
+	d.route = route
+	_row("Walks", _options([["loop", "Round in a loop"], ["back_and_forth", "Back and forth"]], String(route.get("mode", "loop")), func(v: Variant) -> void:
+		route.mode = String(v)
+		_commit(id + ":route", true)))
+	var speed := SpinBox.new()
+	speed.min_value = 0.2
+	speed.max_value = 6
+	speed.step = 0.1
+	speed.suffix = "m/s"
+	speed.value = float(route.get("speed", 1.6))
+	speed.value_changed.connect(func(v: float) -> void:
+		route.speed = v
+		_commit(id + ":route_speed"))
+	_row("Speed", speed)
+	var wait := SpinBox.new()
+	wait.min_value = 0
+	wait.max_value = 60
+	wait.step = 0.5
+	wait.suffix = "s"
+	wait.value = float(route.get("wait", 2.0))
+	wait.value_changed.connect(func(v: float) -> void:
+		route.wait = v
+		_commit(id + ":route_wait"))
+	_row("Pause at each spot", wait)
+	for i in pts.size():
+		var head := HBoxContainer.new()
+		var label := Label.new()
+		label.text = "Spot %d" % (i + 1)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(label)
+		if pts.size() > 2:
+			head.add_child(_button("Remove", "", func() -> void:
+				pts.remove_at(i)
+				_commit(id + ":route", true)))
+		_box.add_child(head)
+		_box.add_child(_vec3(LevelData.vec3(pts[i]), {"step": 0.5}, func(v: Vector3) -> void:
+			pts[i] = LevelData.arr3(v)
+			_commit(id + ":spot%d" % i)))
+	var buttons := HBoxContainer.new()
+	buttons.add_child(_button("Add a spot", "4 m past the last one. Then set where it is.", func() -> void:
+		pts.append(LevelData.arr3(LevelData.vec3(pts[pts.size() - 1]) + Vector3(0, 0, -4)))
+		_commit(id + ":route", true)))
+	buttons.add_child(_button("No route", "They stand still.", func() -> void:
+		d.erase("route")
+		d.erase("walking")
+		_commit(id + ":route", true)))
+	_box.add_child(buttons)
 
 
 func _trigger_section(id: String, kind: String, d: Dictionary) -> void:

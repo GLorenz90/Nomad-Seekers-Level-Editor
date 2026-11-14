@@ -23,6 +23,7 @@ static func run(doc: EditorDoc) -> Array:
 	_check_interaction(doc, out)
 	_check_combat(doc, out)
 	_check_rules(doc, out)
+	_check_quest(doc, out)
 	# The shared format check has the last word: anything it still objects
 	# to that wasn't already caught above is reported as it says it.
 	if errors(out).is_empty():
@@ -53,7 +54,9 @@ static func _add(out: Array, severity: String, text: String, id: String, layer: 
 static func _check_level(doc: EditorDoc, out: Array) -> void:
 	var level := doc.level
 	var rooms := level.room_count()
-	if level.size() == "":
+	if doc.is_nomad2():
+		pass  # laid over Nomad-2: no rooms of its own
+	elif level.size() == "":
 		if rooms == 0:
 			_add(out, "error", "There are no rooms yet. Build a floor: the navmesh on it becomes your first room.", "", 1)
 		elif rooms < 5:
@@ -208,6 +211,19 @@ static func _check_interaction(doc: EditorDoc, out: Array) -> void:
 		var id := String(o.get("id", ""))
 		var name := doc.label_of(id)
 		match String(o.get("type", "")):
+			"person":
+				if (o.get("talk", []) as Array).is_empty() and not _targets(rules, id, ["set_talk"]):
+					_add(out, "warning", "%s has nothing to say. Pick a dialogue for them (What they say)." % name, id, 2)
+				for key in ["show_from", "show_until"]:
+					var step := String(o.get(key, ""))
+					if step != "" and (doc.quest == null or not doc.quest.has_step(step)):
+						_add(out, "error", "%s waits for quest step \"%s\", which the quest doesn't have." % [name, step], id, 2)
+				for t in o.get("talk", []):
+					var from := String(t.get("from_step", "")) if t is Dictionary else ""
+					if from != "" and (doc.quest == null or not doc.quest.has_step(from)):
+						_add(out, "error", "%s has lines for quest step \"%s\", which the quest doesn't have." % [name, from], id, 2)
+					elif t is Dictionary and String(t.get("dialogue", "")) == "":
+						_add(out, "error", "%s has a line with no dialogue chosen." % name, id, 2)
 			"door":
 				var opened := _targets(rules, id, ["open", "toggle"])
 				var closed := _targets(rules, id, ["close", "toggle"])
@@ -260,16 +276,28 @@ static func _check_interaction(doc: EditorDoc, out: Array) -> void:
 			"bridge":
 				if not bool(o.get("extended", false)) and not _targets(rules, id, ["extend", "toggle"]):
 					_add(out, "warning", "%s starts retracted and nothing ever extends it." % name, id, 2)
-	if exits == 0:
+	if doc.is_nomad2():
+		pass  # Nomad-2 has its own teleporter and depot
+	elif exits == 0:
 		_add(out, "error", "There's no way out. Add a Teleporter (Interaction layer) and choose where it goes.", "", 2)
-	if depots == 0 and not level.map.areas.is_empty():
+	if depots == 0 and not level.map.areas.is_empty() and not doc.is_nomad2():
 		_add(out, "warning", "There's no Lumidium depot. Seekers usually get one near the start and one near the exit.", "", 2)
+	# Dialogues people say (their talk lines, or set by a trigger) count as started.
+	var said := {}
+	for o in level.interaction.objects:
+		for t in o.get("talk", []) if String(o.get("type", "")) == "person" else []:
+			if t is Dictionary:
+				said[String(t.get("dialogue", ""))] = true
+	for rule in rules:
+		for a in rule.get("do", []):
+			if String(a.get("action", "")) == "set_talk":
+				said[String(a.get("dialogue", ""))] = true
 	for d in level.interaction.dialogues:
 		var id := String(d.get("id", ""))
 		if (d.get("lines", []) as Array).is_empty():
 			_add(out, "error", "Dialogue \"%s\" has no lines." % id, "dialogue:" + id, 2)
-		if not _targets(rules, id, ["start_dialogue"]):
-			_add(out, "warning", "Dialogue \"%s\" is never started. Add a trigger that starts it." % id, "dialogue:" + id, 2)
+		if not said.has(id) and not _targets(rules, id, ["start_dialogue"]):
+			_add(out, "warning", "Dialogue \"%s\" is never started. Add a trigger that starts it, or have someone say it." % id, "dialogue:" + id, 2)
 
 
 static func _targets(rules: Array, id: String, actions: Array) -> bool:
@@ -363,6 +391,10 @@ static func _check_rules(doc: EditorDoc, out: Array) -> void:
 					_add(out, "error", "%s waits for timer \"%s\", but nothing starts that timer." % [what, source], rid, 2)
 			elif event == "flag_set":
 				pass
+			elif event == "step_completed":
+				if doc.quest == null or not doc.quest.has_step(source):
+					_add(out, "error", "%s waits for quest step \"%s\", which %s." % [what, source,
+						"this level's quest doesn't have" if doc.quest else "doesn't exist: this level isn't part of a quest"], rid, 2)
 			elif not known.has(source):
 				_add(out, "error", "%s is set off by \"%s\", which no longer exists. Choose something else or delete the trigger." % [what, source], rid, 2)
 			elif String(row[2]) == "combat" and level.combat_room(source).is_empty():
@@ -384,6 +416,23 @@ static func _check_rules(doc: EditorDoc, out: Array) -> void:
 				elif action == "start_combat" and level.combat_room(target).is_empty():
 					_add(out, "error", "%s starts the fight in %s, but that room has no fight." % [what, doc.label_of(target)], rid, 2)
 			match action:
+				"complete_step":
+					var step := String(a.get("target", a.get("step", "")))
+					if doc.quest == null:
+						_add(out, "error", "%s completes a quest step, but this level isn't part of a quest. Make it from Quest > New quest level." % what, rid, 2)
+					elif not doc.quest.has_step(step):
+						_add(out, "error", "%s completes quest step \"%s\", which the quest doesn't have." % [what, step], rid, 2)
+				"stop_escort":
+					var who := String(a.get("target", ""))
+					var known_people := Wiring.candidates("escort", doc).map(func(c): return c[0])
+					if who == "" or not known_people.has(who):
+						_add(out, "error", "%s stops escorting \"%s\", who isn't here or on the quest's Nomad-2." % [what, who], rid, 2)
+				"set_quest_flag":
+					if String(a.get("flag", "")) == "":
+						_add(out, "error", "%s sets a quest flag with no name." % what, rid, 2)
+				"set_talk":
+					if doc.find_dialogue(String(a.get("dialogue", ""))).is_empty():
+						_add(out, "error", "%s changes what someone says, but no dialogue is chosen." % what, rid, 2)
 				"banner":
 					if String(a.get("text", "")).strip_edges() == "":
 						_add(out, "warning", "%s shows a banner with no text." % what, rid, 2)
@@ -396,3 +445,21 @@ static func _check_rules(doc: EditorDoc, out: Array) -> void:
 				"complete_objective":
 					if String(a.get("key", "")) == "":
 						_add(out, "error", "%s completes a quest objective with no key." % what, rid, 2)
+
+
+# --- The quest ----------------------------------------------------------------------------------
+
+## The quest the level belongs to (title, steps, areas), and conditions that
+## name its steps.
+static func _check_quest(doc: EditorDoc, out: Array) -> void:
+	if doc.quest:
+		for text in doc.quest.problems():
+			_add(out, "error", text, "", 2)
+	for rule in doc.level.interaction.rules:
+		for c in rule.get("if", []):
+			if String(c.get("check", "")) == "quest_step":
+				var step := String(c.get("step", ""))
+				if doc.quest == null or not doc.quest.has_step(step):
+					_add(out, "error", "A trigger checks quest step \"%s\", which %s." % [step,
+						"the quest doesn't have" if doc.quest else "doesn't exist: this level isn't part of a quest"],
+						"rule:" + String(rule.get("id", "")), 2)
