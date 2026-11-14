@@ -29,22 +29,22 @@ func new_quest() -> void:
 	dialog.title = "New quest"
 	dialog.ok_button_text = "Create"
 	var box := dialogs._vbox(dialog)
-	box.add_child(dialogs._label("A quest is its own session, like PSO's: accepting it at the Guild reloads Nomad-2 with the people you place, and the teleporter goes only to the quest's areas. Its steps are done in order.", true))
+	box.add_child(Dialogs._label("A quest is its own session, like PSO's: accepting it at the Guild reloads Nomad-2 with the people you place, and the teleporter goes only to the quest's areas. Its steps are done in order.", true))
 	var title := LineEdit.new()
 	title.placeholder_text = "The Foreman's Favour"
 	Dialogs._row(box, "Title", title)
 	var client := LineEdit.new()
 	client.placeholder_text = "Petram Solidus, foreman"
 	Dialogs._row(box, "Client", client, "Who's asking, shown at the Guild counter.")
-	box.add_child(dialogs._label("It's saved in: " + quests_dir(), true))
+	box.add_child(Dialogs._label("It's saved in: " + quests_dir(), true))
 	dialog.confirmed.connect(func() -> void:
-		var name := title.text.strip_edges() if title.text.strip_edges() != "" else "New quest"
-		var dir := quests_dir().path_join(EditorDoc.slug(name))
+		var quest_name := title.text.strip_edges() if title.text.strip_edges() != "" else "New quest"
+		var dir := quests_dir().path_join(EditorDoc.slug(quest_name))
 		var n := 2
 		while DirAccess.dir_exists_absolute(dir):
-			dir = quests_dir().path_join("%s_%d" % [EditorDoc.slug(name), n])
+			dir = quests_dir().path_join("%s_%d" % [EditorDoc.slug(quest_name), n])
 			n += 1
-		var problem := create_quest(dir, name, client.text.strip_edges())
+		var problem := create_quest(dir, quest_name, client.text.strip_edges())
 		dialog.queue_free()
 		if problem != "":
 			dialogs.tell("Couldn't create the quest", problem)
@@ -167,8 +167,8 @@ func _fill_details(box: VBoxContainer, data: Dictionary, rebuild: Callable) -> v
 
 	# Steps.
 	box.add_child(HSeparator.new())
-	box.add_child(dialogs._label("STEPS (done in order)", false, 14))
-	box.add_child(dialogs._label("\"Done by a trigger\" steps are completed by a trigger's \"Complete a quest step\": after a talk, a hand-over, reaching a spot. People can change what they say, show up or leave as steps are done.", true))
+	box.add_child(Dialogs._label("STEPS (done in order)", false, 14))
+	box.add_child(Dialogs._label("\"Done by a trigger\" steps are completed by a trigger's \"Complete a quest step\": after a talk, a hand-over, reaching a spot. People can change what they say, show up or leave as steps are done.", true))
 	var steps: Array = data.get("steps", [])
 	data.steps = steps
 	var enemies := []
@@ -227,15 +227,15 @@ func _fill_details(box: VBoxContainer, data: Dictionary, rebuild: Callable) -> v
 			rebuild.call()))
 		box.add_child(row)
 	box.add_child(_small_button("Add a step", func() -> void:
-		var temp := QuestDoc.new()
-		temp.data = data
-		steps.append({"id": temp.new_step_id("step %d" % (steps.size() + 1)), "type": "event", "goal": ""})
+		var ids := QuestDoc.new()
+		ids.data = data
+		steps.append({"id": ids.new_step_id("step %d" % (steps.size() + 1)), "type": "event", "goal": ""})
 		rebuild.call()))
 
 	# Areas.
 	box.add_child(HSeparator.new())
-	box.add_child(dialogs._label("WHERE THE TELEPORTER GOES", false, 14))
-	box.add_child(dialogs._label("While the quest is on, Nomad-2's teleporter offers only these. An area from the game gets a fresh pick of its levels each quest, or the level you name. The quest's own levels are only in this quest.", true))
+	box.add_child(Dialogs._label("WHERE THE TELEPORTER GOES", false, 14))
+	box.add_child(Dialogs._label("While the quest is on, Nomad-2's teleporter offers only these. An area from the game gets a fresh pick of its levels each quest, or the level you area_name. The quest's own levels are only in this quest.", true))
 	var areas: Array = data.get("areas", [])
 	data.areas = areas
 	var game_areas := Catalog.game_areas()
@@ -243,12 +243,12 @@ func _fill_details(box: VBoxContainer, data: Dictionary, rebuild: Callable) -> v
 		var a: Dictionary = areas[i]
 		var row := HBoxContainer.new()
 		var own := String(a.get("quest_level", "")) != ""
-		var name := LineEdit.new()
-		name.text = String(a.get("name", ""))
-		name.placeholder_text = "Name on the teleporter"
-		name.custom_minimum_size.x = 180
-		name.text_changed.connect(func(t: String) -> void: a.name = t)
-		row.add_child(name)
+		var area_name := LineEdit.new()
+		area_name.text = String(a.get("name", ""))
+		area_name.placeholder_text = "Name on the teleporter"
+		area_name.custom_minimum_size.x = 180
+		area_name.text_changed.connect(func(t: String) -> void: a.name = t)
+		row.add_child(area_name)
 		if own:
 			var levels := []
 			for l in q.levels():
@@ -269,9 +269,9 @@ func _fill_details(box: VBoxContainer, data: Dictionary, rebuild: Callable) -> v
 			row.add_child(area)
 			var level := LineEdit.new()
 			level.text = String(a.get("level", "")).get_file()
-			level.placeholder_text = "a fresh pick (or a level's folder name)"
+			level.placeholder_text = "a fresh pick (or a level's folder area_name)"
 			level.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			level.tooltip_text = "Leave empty for a fresh pick from the area each quest, or name one of the area's levels (its folder) to always use it."
+			level.tooltip_text = "Leave empty for a fresh pick from the area each quest, or area_name one of the area's levels (its folder) to always use it."
 			level.text_changed.connect(func(t: String) -> void:
 				if t.strip_edges() == "":
 					a.erase("level")
@@ -297,8 +297,8 @@ func _fill_details(box: VBoxContainer, data: Dictionary, rebuild: Callable) -> v
 
 	# Offered only if.
 	box.add_child(HSeparator.new())
-	box.add_child(dialogs._label("OFFERED ONLY IF", false, 14))
-	box.add_child(dialogs._label("Story flags the character must have (or not) for the Guild to list this quest, so earlier choices can open or close quests. Leave empty to always offer it.", true))
+	box.add_child(Dialogs._label("OFFERED ONLY IF", false, 14))
+	box.add_child(Dialogs._label("Story flags the character must have (or not) for the Guild to list this quest, so earlier choices can open or close quests. Leave empty to always offer it.", true))
 	var requires: Array = data.get("requires", [])
 	data.requires = requires
 	for i in requires.size():
@@ -317,7 +317,7 @@ func _fill_details(box: VBoxContainer, data: Dictionary, rebuild: Callable) -> v
 	if not problems.is_empty():
 		box.add_child(HSeparator.new())
 		for p in problems:
-			var label := dialogs._label("Must fix: " + p, false)
+			var label := Dialogs._label("Must fix: " + p, false)
 			label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.45))
 			box.add_child(label)
 
@@ -368,12 +368,12 @@ func _flag_row(c: Dictionary, can_be_quest: bool, on_remove: Callable) -> HBoxCo
 	var gap := Control.new()
 	gap.custom_minimum_size.x = 24
 	row.add_child(gap)
-	var name := LineEdit.new()
-	name.text = String(c.get("flag", ""))
-	name.placeholder_text = "flag name"
-	name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name.text_changed.connect(func(t: String) -> void: c.flag = t.strip_edges())
-	row.add_child(name)
+	var flag_name := LineEdit.new()
+	flag_name.text = String(c.get("flag", ""))
+	flag_name.placeholder_text = "flag name"
+	flag_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	flag_name.text_changed.connect(func(t: String) -> void: c.flag = t.strip_edges())
+	row.add_child(flag_name)
 	if can_be_quest:
 		var kind := Dialogs._options([["quest", "quest flag"], ["story", "story flag"]], "story" if bool(c.get("story", false)) else "quest")
 		kind.item_selected.connect(func(index: int) -> void:
@@ -396,8 +396,8 @@ func _flag_row(c: Dictionary, can_be_quest: bool, on_remove: Callable) -> HBoxCo
 ## reward and set story flags.
 func _endings_section(box: VBoxContainer, data: Dictionary, rebuild: Callable) -> void:
 	box.add_child(HSeparator.new())
-	box.add_child(dialogs._label("ENDINGS", false, 14))
-	box.add_child(dialogs._label("Told at the Guild when the quest is reported. The first ending whose flags all hold is the one told, so put the one with no conditions last as the default. An ending can pay its own reward and set story flags, which stay with every Seeker in the party for later quests.", true))
+	box.add_child(Dialogs._label("ENDINGS", false, 14))
+	box.add_child(Dialogs._label("Told at the Guild when the quest is reported. The first ending whose flags all hold is the one told, so put the one with no conditions last as the default. An ending can pay its own reward and set story flags, which stay with every Seeker in the party for later quests.", true))
 	var endings: Array = data.get("endings", [])
 	data.endings = endings
 	for i in endings.size():
@@ -447,7 +447,7 @@ func _endings_section(box: VBoxContainer, data: Dictionary, rebuild: Callable) -
 		var conds: Array = e.get("if", [])
 		e["if"] = conds
 		if not conds.is_empty():
-			box.add_child(dialogs._label("When:", false))
+			box.add_child(Dialogs._label("When:", false))
 		for j in conds.size():
 			box.add_child(_flag_row(conds[j], true, func() -> void:
 				conds.remove_at(j)
@@ -455,25 +455,25 @@ func _endings_section(box: VBoxContainer, data: Dictionary, rebuild: Callable) -
 		var sets: Dictionary = e.get("sets", {})
 		e.sets = sets
 		if not sets.is_empty():
-			box.add_child(dialogs._label("Sets story flags:", false))
+			box.add_child(Dialogs._label("Sets story flags:", false))
 		for k in sets.keys():
 			var key: String = k
 			var row := HBoxContainer.new()
 			var gap := Control.new()
 			gap.custom_minimum_size.x = 24
 			row.add_child(gap)
-			var name := LineEdit.new()
-			name.text = key
-			name.placeholder_text = "story flag"
-			name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			name.text_submitted.connect(func(t: String) -> void:
+			var flag_name := LineEdit.new()
+			flag_name.text = key
+			flag_name.placeholder_text = "story flag"
+			flag_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			flag_name.text_submitted.connect(func(t: String) -> void:
 				_rename_key(sets, key, t.strip_edges())
 				rebuild.call())
-			name.focus_exited.connect(func() -> void:
-				if name.text.strip_edges() != key:
-					_rename_key(sets, key, name.text.strip_edges())
+			flag_name.focus_exited.connect(func() -> void:
+				if flag_name.text.strip_edges() != key:
+					_rename_key(sets, key, flag_name.text.strip_edges())
 					rebuild.call.call_deferred())
-			row.add_child(name)
+			row.add_child(flag_name)
 			var on := CheckBox.new()
 			on.text = "on"
 			on.button_pressed = bool(sets[key])
@@ -530,7 +530,7 @@ func quest_levels() -> void:
 	dialog.title = "Quest: " + q.title()
 	dialog.ok_button_text = "Close"
 	var box := dialogs._vbox(dialog)
-	box.add_child(dialogs._label("Open part of the quest. Each is edited like a level; triggers in any of them can complete the quest's steps.", true))
+	box.add_child(Dialogs._label("Open part of the quest. Each is edited like a level; triggers in any of them can complete the quest's steps.", true))
 	var go := func(path: String) -> void:
 		dialog.queue_free()
 		dialogs.leave_level(func() -> void: app.open_path(path))
@@ -565,15 +565,15 @@ func new_quest_level() -> void:
 	dialog.title = "New level for " + q.title()
 	dialog.ok_button_text = "Create"
 	var box := dialogs._vbox(dialog)
-	box.add_child(dialogs._label("A level only this quest uses. It's added to where the teleporter goes, and starts with a floor and a teleporter back to Nomad-2.", true))
+	box.add_child(Dialogs._label("A level only this quest uses. It's added to where the teleporter goes, and starts with a floor and a teleporter back to Nomad-2.", true))
 	var name_edit := LineEdit.new()
 	name_edit.placeholder_text = "Survey site"
 	Dialogs._row(box, "Name", name_edit)
 	dialog.confirmed.connect(func() -> void:
-		var name := name_edit.text.strip_edges() if name_edit.text.strip_edges() != "" else "Quest level"
+		var level_name := name_edit.text.strip_edges() if name_edit.text.strip_edges() != "" else "Quest level"
 		dialog.queue_free()
 		dialogs.leave_level(func() -> void:
-			var path := create_quest_level(q, name)
+			var path := create_quest_level(q, level_name)
 			if path == "":
 				dialogs.tell("Couldn't create the level", "The quest's levels folder couldn't be written.")
 				return
@@ -584,22 +584,22 @@ func new_quest_level() -> void:
 
 ## Makes a level in the quest's levels folder and adds it to the quest's
 ## areas. Returns its folder ("" if it couldn't be written).
-static func create_quest_level(q: QuestDoc, name: String) -> String:
-	var slug := EditorDoc.slug(name)
+static func create_quest_level(q: QuestDoc, level_name: String) -> String:
+	var slug := EditorDoc.slug(level_name)
 	var dir := q.levels_dir().path_join(slug)
 	var n := 2
 	while DirAccess.dir_exists_absolute(dir):
-		slug = "%s_%d" % [EditorDoc.slug(name), n]
+		slug = "%s_%d" % [EditorDoc.slug(level_name), n]
 		dir = q.levels_dir().path_join(slug)
 		n += 1
-	var doc := EditorDoc.create(name, "", dir)
+	var doc := EditorDoc.create(level_name, "", dir)
 	doc.add("piece", {"asset": "builtin:box", "size": [16, 0.5, 16], "pos": [0, -0.5, 0], "surface": "floor", "color": Catalog.FLOOR_COLOR})
 	doc.level.map.start = {"pos": [0, 0.1, 4], "yaw": 0}
 	doc.add("object", {"type": "teleporter", "destination": "hub", "label": "Back to Nomad-2", "pos": [0, 0, 6.5]})
 	doc._reset_history()
 	if doc.save() != OK:
 		return ""
-	(q.data.areas as Array).append({"quest_level": slug, "name": name})
+	(q.data.areas as Array).append({"quest_level": slug, "name": level_name})
 	q.save()
 	return dir
 

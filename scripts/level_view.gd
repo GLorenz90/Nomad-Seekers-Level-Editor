@@ -136,15 +136,15 @@ func _draw_base() -> void:
 	for p in doc.base_pieces():
 		root.add_child(ItemVisuals.build("piece", p, doc, false, 1))
 	for l in doc.base.get("labels", []):
-		var sign := Label3D.new()
-		sign.text = String(l.get("text", ""))
-		sign.position = LevelData.vec3(l.get("pos"))
-		sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		sign.font_size = clampi(int(l.get("size", 48)), 16, 160)
-		sign.pixel_size = 0.01
-		sign.outline_size = 10
-		sign.modulate = Color(0.85, 0.9, 1.0, 0.85)
-		root.add_child(sign)
+		var sign_label := Label3D.new()
+		sign_label.text = String(l.get("text", ""))
+		sign_label.position = LevelData.vec3(l.get("pos"))
+		sign_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		sign_label.font_size = clampi(int(l.get("size", 48)), 16, 160)
+		sign_label.pixel_size = 0.01
+		sign_label.outline_size = 10
+		sign_label.modulate = Color(0.85, 0.9, 1.0, 0.85)
+		root.add_child(sign_label)
 	var marks := {"start": [Color(0.25, 0.9, 0.45), "Seekers arrive"], "teleporter": [Color(0.4, 0.8, 1.0), "Teleporter"],
 		"depot": [Color(0.9, 0.75, 0.3), "Lumidium depot"], "clerk": [Color(0.75, 0.75, 0.85), ""]}
 	for m in doc.base.get("markers", []):

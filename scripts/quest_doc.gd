@@ -18,10 +18,10 @@ var dir := ""
 var data := {}
 
 
-static func create(folder: String, title: String) -> QuestDoc:
+static func create(folder: String, quest_title: String) -> QuestDoc:
 	var q := QuestDoc.new()
 	q.dir = folder
-	q.data = {"format": 1, "id": EditorDoc.slug(title), "title": title, "client": "", "text": "", "reward": 500,
+	q.data = {"format": 1, "id": EditorDoc.slug(quest_title), "title": quest_title, "client": "", "text": "", "reward": 500,
 		"steps": [{"id": "step_1", "type": "event", "goal": ""}], "areas": []}
 	return q
 

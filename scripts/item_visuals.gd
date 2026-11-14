@@ -9,7 +9,7 @@ const ELEMENT_COLORS := {"fire": Color(1.0, 0.4, 0.2), "ice": Color(0.5, 0.85, 1
 
 
 ## The node for an item, already placed. `named` adds a floating name tag.
-static func build(kind: String, d: Dictionary, doc: EditorDoc, named := false, layer := 1) -> Node3D:
+static func build(kind: String, d: Dictionary, doc: EditorDoc, named := false, _layer := 1) -> Node3D:
 	var root := Node3D.new()
 	root.transform = Items.xform(kind, d)
 	var id := String(d.get("id", ""))
@@ -76,7 +76,7 @@ static func build(kind: String, d: Dictionary, doc: EditorDoc, named := false, l
 	return root
 
 
-static func _build_model(root: Node3D, kind: String, d: Dictionary, doc: EditorDoc) -> void:
+static func _build_model(root: Node3D, _kind: String, d: Dictionary, doc: EditorDoc) -> void:
 	var asset := String(d.get("asset", "builtin:box"))
 	var size := LevelData.vec3(d.get("size"), Vector3(4, 1, 4))
 	var color := _color(d.get("color"), Color(0.55, 0.57, 0.6))

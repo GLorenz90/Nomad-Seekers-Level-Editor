@@ -19,7 +19,7 @@ func mouse(at: Vector2, button := -1, pressed := false) -> void:
 		v._gui_input(mm)
 	else:
 		var mb := InputEventMouseButton.new()
-		mb.button_index = button
+		mb.button_index = button as MouseButton
 		mb.pressed = pressed
 		mb.position = at
 		v._gui_input(mb)

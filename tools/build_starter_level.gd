@@ -359,9 +359,9 @@ func _init() -> void:
 				doc.join_areas(id, other)
 		doc.commit()
 		await bake()
-		var err := doc.rename(id, name)
-		if err != "":
-			push_error("rename %s -> %s: %s" % [id, name, err])
+		var why := doc.rename(id, name)
+		if why != "":
+			push_error("rename %s -> %s: %s" % [id, name, why])
 		doc.level.find_area(name).name = String(name).capitalize()
 		renamed[name] = true
 		doc.commit()

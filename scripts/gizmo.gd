@@ -196,12 +196,12 @@ static func side_handles(box: AABB, axes: Array) -> Array:
 			for sz in signs_per_axis[2]:
 				var signs := [sx, sy, sz]
 				var p := c
-				var name := "c"
+				var handle := "c"
 				for i in 3:
 					if signs[i] != 0:
 						p[i] = box.end[i] if signs[i] > 0 else box.position[i]
-					name += "+" if signs[i] > 0 else ("-" if signs[i] < 0 else "0")
-				out.append({"handle": name, "local": p})
+					handle += "+" if signs[i] > 0 else ("-" if signs[i] < 0 else "0")
+				out.append({"handle": handle, "local": p})
 	return out
 
 
@@ -336,16 +336,16 @@ func handle_screen_pos(handle: String) -> Vector2:
 
 func _pick(at: Vector2) -> String:
 	if sides_active():
-		var best := ""
-		var best_d := PICK_PX * 1.3
+		var nearest := ""
+		var nearest_d := PICK_PX * 1.3
 		for p in _points:
 			if camera.is_position_behind(p.pos):
 				continue
 			var d := camera.unproject_position(p.pos).distance_to(at)
-			if d < best_d:
-				best_d = d
-				best = p.handle
-		return best
+			if d < nearest_d:
+				nearest_d = d
+				nearest = p.handle
+		return nearest
 	var best := ""
 	var best_d := PICK_PX
 	for seg in _segments():
@@ -427,25 +427,25 @@ func drag(at: Vector2, no_snap: bool) -> void:
 		Items.set_pos(_kind, d, _start.pos + axis * delta)
 	elif _handle in ["xy", "xz", "yz"]:
 		var pl: Array = _plane(_handle)
-		var hit := _plane_hit(f * (AXES[pl[3]] as Vector3), origin, at)
-		if hit == Vector3.INF or _start.grab == Vector3.INF:
+		var on_plane := _plane_hit(f * (AXES[pl[3]] as Vector3), origin, at)
+		if on_plane == Vector3.INF or _start.grab == Vector3.INF:
 			return
-		var local_delta: Vector3 = f.inverse() * (hit - (_start.grab as Vector3))
+		var local_delta: Vector3 = f.inverse() * (on_plane - (_start.grab as Vector3))
 		local_delta[pl[3]] = 0.0
 		if snap:
 			local_delta = local_delta.snapped(Vector3.ONE * snap_step)
 		Items.set_pos(_kind, d, _start.pos + f * local_delta)
 	elif _handle in ["rx", "ry", "rz"]:
 		var axis := f * (AXES["xyz".find(_handle[1])] as Vector3)
-		var hit := _plane_hit(axis, origin, at)
-		if hit == Vector3.INF or _start.grab == Vector3.INF:
+		var on_plane := _plane_hit(axis, origin, at)
+		if on_plane == Vector3.INF or _start.grab == Vector3.INF:
 			return
-		var angle := ((_start.grab as Vector3) - origin).signed_angle_to(hit - origin, axis)
+		var angle := ((_start.grab as Vector3) - origin).signed_angle_to(on_plane - origin, axis)
 		if not no_snap:
 			angle = snappedf(angle, deg_to_rad(15.0))
-		var basis: Basis = Basis(axis.normalized(), angle) * (_start.basis as Basis)
+		var turned: Basis = Basis(axis.normalized(), angle) * (_start.basis as Basis)
 		if Items.full_rot(_kind):
-			Items.set_rot(_kind, d, basis.get_euler() * (180.0 / PI))
+			Items.set_rot(_kind, d, turned.get_euler() * (180.0 / PI))
 		else:
 			Items.set_rot(_kind, d, Vector3(0, (_start.rot as Vector3).y + rad_to_deg(angle), 0))
 	elif _handle in ["sx", "sy", "sz"]:
@@ -601,5 +601,5 @@ func _axis_t(axis: Vector3, origin: Vector3, at: Vector2) -> float:
 
 
 func _plane_hit(normal: Vector3, origin: Vector3, at: Vector2) -> Vector3:
-	var hit = Plane(normal.normalized(), origin).intersects_ray(camera.project_ray_origin(at), camera.project_ray_normal(at))
-	return hit if hit != null else Vector3.INF
+	var crossing = Plane(normal.normalized(), origin).intersects_ray(camera.project_ray_origin(at), camera.project_ray_normal(at))
+	return crossing if crossing != null else Vector3.INF
