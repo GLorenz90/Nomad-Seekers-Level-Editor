@@ -20,6 +20,8 @@ func _init() -> void:
   if OS.get_environment("SHOT_DIST") != "":
     app.view._dist = float(OS.get_environment("SHOT_DIST"))
     app.view._update_camera()
+  if OS.get_environment("SHOT_NONAV") == "1":
+    app._toggle_view_option(3)
   if OS.get_environment("SHOT_SEL") != "":
     app.doc.select(OS.get_environment("SHOT_SEL"))
     app.view.focus(OS.get_environment("SHOT_SEL"))

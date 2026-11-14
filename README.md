@@ -104,8 +104,11 @@ it makes the level compliant. Its `BUILD_LOG.md` lists each step.
    Solid pieces get a **hitbox** made from their own shape: **Concave** (the default) follows
    every triangle; **Convex** wraps it in one hull (faster, but fills in arches). You choose both
    when you import a model, can change them later for every copy (Level > Imported models), or
-   override them on any one placed copy. Select a piece to see its hitbox as a cyan wireframe:
-   that's exactly what the game builds.
+   override them on any one placed copy. To see a selected piece's hitbox, turn on
+   View > Show the selected piece's hitbox: it's drawn as cyan lines, exactly what the game builds.
+
+   Whatever you select gets a white outline round its shape (and a thin yellow box round its
+   bounds), so you can still see its own colours and textures while you work on it.
 4. **Rooms come from the navmesh.** The navmesh is sized for a Seeker (0.4 m radius) and rebakes a
    moment after each change. Each separate piece of it is a room, in its own color: the first is
    blue, and a newly split-off one gets a new color.
