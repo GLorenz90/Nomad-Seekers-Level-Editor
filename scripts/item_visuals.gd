@@ -80,11 +80,12 @@ static func _build_model(root: Node3D, kind: String, d: Dictionary, doc: EditorD
 	var asset := String(d.get("asset", "builtin:box"))
 	var size := LevelData.vec3(d.get("size"), Vector3(4, 1, 4))
 	var color := _color(d.get("color"), Color(0.55, 0.57, 0.6))
+	var painted: Material = LevelMaterials.build(doc.level, String(d.get("material", ""))) if doc else null
 	match asset:
-		"builtin:box", "builtin:cylinder", "builtin:ramp":
-			# The same shapes the game and the navmesh use.
-			var mat := material(color)
-			for m in LevelNav.builtin_meshes(asset, size):
+		"builtin:box", "builtin:cylinder", "builtin:ramp", "builtin:curved_wall", "builtin:stairs":
+			# The same shapes the game and the navmesh use, in its material or color.
+			var mat: Material = painted if painted else material(color)
+			for m in LevelNav.builtin_meshes(asset, size, LevelNav.shape_params(d)):
 				var mi := MeshInstance3D.new()
 				mi.mesh = m[0]
 				mi.material_override = mat
@@ -119,6 +120,9 @@ static func _build_model(root: Node3D, kind: String, d: Dictionary, doc: EditorD
 		_:
 			var model := Models.instance(doc.level, asset)
 			if model:
+				if painted:
+					for mi in model.find_children("*", "MeshInstance3D", true, false):
+						(mi as MeshInstance3D).material_override = painted
 				root.add_child(model)
 			else:
 				root.add_child(_at(_box(Vector3.ONE, Color(1, 0, 1)), Vector3(0, 0.5, 0)))

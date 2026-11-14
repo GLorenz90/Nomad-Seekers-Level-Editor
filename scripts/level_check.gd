@@ -10,6 +10,9 @@ extends RefCounted
 ## Each problem: {"level": "error" | "warning", "text", "id", "layer"}.
 ## `id` is what to select ("" for the level as a whole).
 
+const IMAGE_NAMES := {"albedo": "colour image", "normal": "normal map", "roughness_map": "roughness map",
+	"metallic_map": "metallic map", "ao_map": "occlusion map", "emission_map": "glow map", "height_map": "height map"}
+
 
 static func run(doc: EditorDoc) -> Array:
 	var out := []
@@ -165,8 +168,6 @@ static func _check_map(doc: EditorDoc, out: Array) -> void:
 	for a in level.map.assets:
 		var id := String(a.get("id", ""))
 		files[id] = true
-		if String(a.get("license", "")).strip_edges() == "":
-			_add(out, "error", "The imported model \"%s\" has no license. Set one under Level > Imported models." % id, "", 1)
 		if not FileAccess.file_exists(level.dir.path_join(String(a.get("file", "")))):
 			_add(out, "error", "The file for the imported model \"%s\" is missing (%s). Import it again." % [id, a.get("file", "")], "", 1)
 	for key in ["pieces", "decorations"]:
@@ -175,6 +176,24 @@ static func _check_map(doc: EditorDoc, out: Array) -> void:
 			if not asset.begins_with("builtin:") and not files.has(asset):
 				_add(out, "error", "%s uses a model that isn't imported (\"%s\"). Delete it or import the model again." % [
 					doc.label_of(String(p.id)), asset], String(p.id), 1)
+	# Materials.
+	for m in level.map.get("materials", []):
+		var id := String(m.get("id", ""))
+		var shown := String(m.get("name", id))
+		for key in LevelData.MATERIAL_IMAGES:
+			var file := String(m.get(key, ""))
+			if file == "":
+				continue
+			if not FileAccess.file_exists(level.dir.path_join(file)):
+				_add(out, "error", "The %s for the material \"%s\" is missing (%s). Pick it again in the material's settings." % [
+					IMAGE_NAMES.get(key, key), shown, file], "", 1)
+		if String(m.get("height_map", "")) != "" and String(m.get("mapping", "world")) != "uv":
+			_add(out, "warning", "The material \"%s\" has a height map, but height maps only show with Mapping: the model's own UVs." % shown, "", 1)
+	for p in level.map.pieces:
+		var mat := String(p.get("material", ""))
+		if mat != "" and level.find_material(mat).is_empty():
+			_add(out, "error", "%s is painted with a material that isn't in the level (\"%s\"). Pick another one in the inspector." % [
+				doc.label_of(String(p.id)), mat], String(p.id), 1)
 
 
 # --- Layer 2 ----------------------------------------------------------------------------------

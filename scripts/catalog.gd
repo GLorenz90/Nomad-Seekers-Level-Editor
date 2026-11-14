@@ -37,6 +37,10 @@ static var _enemies_from := "?"
 
 # --- Palette ----------------------------------------------------------------------------------
 
+## The Place list's categories on the Map layer, in order.
+const GROUP_ORDER := ["Shapes", "Decorations", "Prefabs", "Materials", "Invisible", "Effects"]
+const LIBRARY_GROUPS := {"decoration": "Decorations", "prefab": "Prefabs", "material": "Materials"}
+
 ## What can be placed on a layer: [{title, tip, kind, data, group}].
 static func palette(layer: int, doc: EditorDoc) -> Array:
 	var out := []
@@ -50,13 +54,32 @@ static func palette(layer: int, doc: EditorDoc) -> Array:
 				{"asset": "builtin:box", "size": [2, 2, 2], "color": WALL_COLOR, "surface": "obstacle"}, "Shapes"))
 			out.append(_entry("Ramp", "A slope that rises toward its front (a floor). Seekers and enemies walk up it.", "piece",
 				{"asset": "builtin:ramp", "size": [4, 2, 4], "color": FLOOR_COLOR, "surface": "floor"}, "Shapes"))
+			out.append(_entry("Stairs", "Solid steps rising toward the front (a floor). Change the number of steps in the inspector: if the navmesh doesn't run up them, each step is too tall (over 0.4 m), so add more.", "piece",
+				{"asset": "builtin:stairs", "size": [4, 2, 6], "steps": 8, "color": FLOOR_COLOR, "surface": "floor"}, "Shapes"))
+			out.append(_entry("Curved wall", "A wall bent along an arc (an obstacle). Set how far it bends in the inspector; its width is its length along the curve.", "piece",
+				{"asset": "builtin:curved_wall", "size": [8, 3, 0.5], "bend": 90.0, "color": WALL_COLOR, "surface": "obstacle"}, "Shapes"))
 			out.append(_entry("Pillar", "A solid cylinder (an obstacle).", "piece",
 				{"asset": "builtin:cylinder", "size": [1.5, 4, 1.5], "color": WALL_COLOR, "surface": "obstacle"}, "Shapes"))
-			for a in doc.level.map.assets:
-				var title := String(a.get("id", "")).capitalize()
-				var surface := String(a.get("surface", "obstacle"))
-				out.append(_entry(title, "Your model (%s). %s" % [SURFACE_NAMES.get(surface, surface).to_lower(), SURFACE_HELP.get(surface, "")],
-					"piece", {"asset": a.id}, "Your models"))
+			# Your imported models and materials, each in its category and folder.
+			for category in ["decoration", "prefab"]:
+				for it in doc.library_items(category):
+					var a: Dictionary = it.data
+					var surface := String(a.get("surface", "obstacle"))
+					var e := _entry(String(a.get("id", "")).capitalize(),
+						"Your model (%s). %s" % [SURFACE_NAMES.get(surface, surface).to_lower(), SURFACE_HELP.get(surface, "")],
+						"piece", {"asset": a.id}, LIBRARY_GROUPS[category])
+					e.folder = it.folder
+					e.library = category
+					e.id = it.id
+					out.append(e)
+			for it in doc.library_items("material"):
+				var m: Dictionary = it.data
+				var e := _entry(String(m.get("name", it.id)), "Click, then click shapes or models to paint them with it. Right-click to edit it.",
+					"material", {"material": it.id}, "Materials")
+				e.folder = it.folder
+				e.library = "material"
+				e.id = it.id
+				out.append(e)
 			out.append(_entry("Room boundary", "An invisible plane that splits the navmesh: put one across each doorway or gap between two rooms (or a room and a corridor). Each piece of navmesh it makes is a room or corridor.",
 				"boundary", {"size": [4, 4]}, "Invisible"))
 			out.append(_entry("Invisible wall", "Blocks movement without being seen. Can block everyone, or only Seekers (enemies walk through).",
@@ -201,6 +224,10 @@ static func type_name(kind: String, d: Dictionary) -> String:
 					return "Block"
 				"builtin:ramp":
 					return "Ramp"
+				"builtin:stairs":
+					return "Stairs"
+				"builtin:curved_wall":
+					return "Curved wall"
 				"builtin:cylinder":
 					return "Pillar"
 				"builtin:fireflies":
@@ -259,7 +286,8 @@ static func id_prefix(kind: String, d: Dictionary) -> String:
 			var asset := String(d.get("asset", ""))
 			if asset == "builtin:box":
 				return type_name(kind, d).to_lower()
-			return {"builtin:ramp": "ramp", "builtin:cylinder": "pillar"}.get(asset, asset)
+			return {"builtin:ramp": "ramp", "builtin:cylinder": "pillar", "builtin:stairs": "stairs",
+				"builtin:curved_wall": "curve"}.get(asset, asset)
 	return kind
 
 
@@ -295,10 +323,25 @@ static func fields(kind: String, d: Dictionary, level: LevelData = null) -> Arra
 			f.append({"k": "pos", "l": "Position", "t": "vec3", "step": 0.5})
 			f.append({"k": "rot", "l": "Rotation (degrees)", "t": "vec3", "step": 15})
 			if builtin:
-				f.append({"k": "size", "l": "Size (wide, tall, deep)", "t": "vec3", "step": 0.5, "min": 0.05})
-				f.append({"k": "color", "l": "Color", "t": "color", "def": WALL_COLOR})
+				var size_label := "Size (length along the curve, tall, thick)" if asset == "builtin:curved_wall" else "Size (wide, tall, deep)"
+				f.append({"k": "size", "l": size_label, "t": "vec3", "step": 0.5, "min": 0.05})
 			else:
 				f.append({"k": "scale", "l": "Scale", "t": "vec3", "step": 0.1, "min": 0.01, "def": [1, 1, 1]})
+			if asset == "builtin:curved_wall":
+				f.append({"k": "bend", "l": "Bend (degrees)", "t": "float", "min": -LevelData.BEND_MAX, "max": LevelData.BEND_MAX, "step": 5, "def": 90.0,
+					"tip": "How far the wall turns along its length: 90 is a quarter circle, 180 a half, 360 a full ring. Negative bends the other way; 0 is straight."})
+			if asset == "builtin:stairs":
+				f.append({"k": "steps", "l": "Steps", "t": "int", "min": 1, "max": LevelData.STEPS_MAX, "def": 8,
+					"tip": "How many steps. Each step is its height divided by this; a step taller than 0.4 m is too tall to walk, and the navmesh stops at it."})
+			var mats := [["", "None (plain color)"]]
+			if level:
+				for m in level.map.materials:
+					var folder := String(m.get("folder", ""))
+					mats.append([String(m.id), (folder + " / " if folder != "" else "") + String(m.get("name", m.id))])
+			f.append({"k": "material", "l": "Material", "t": "enum", "o": mats, "def": "", "unset_empty": true, "rebuild": true,
+				"tip": "Paint it with one of the level's materials (Materials in the Place list). Tip: click a material there, then click pieces to paint them."})
+			if builtin and String(d.get("material", "")) == "":
+				f.append({"k": "color", "l": "Color", "t": "color", "def": WALL_COLOR})
 			var surface_options := []
 			var hitbox_options := []
 			if not builtin:

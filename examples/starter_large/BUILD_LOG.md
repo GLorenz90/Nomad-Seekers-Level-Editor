@@ -18,6 +18,8 @@ Walls in random order, plus one dropped across a doorway by mistake
 Corridor floors last
   9 to fix, 26 to check, 27 rooms + 0 corridors so far
 Rocks on the plains, lights, fireflies, wiring and the rest of the enemies
+A dais up a flight of stairs, a curved planter, and a stone material
+  9 to fix, 26 to check, 27 rooms + 0 corridors so far
 Compliance pass
   removed the wall dropped across the hound den's doorway
   rooms named after their spaces, the bridge and lift rooms' two sides joined, 10 corridors marked

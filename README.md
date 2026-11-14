@@ -20,6 +20,7 @@ navmesh:
 - a poison mist with a vent button
 - a bridge over a pit and a lift over another (each room's two sides joined into one)
 - a boss room that wakes the exit
+- a dais up a flight of stairs, a curved planter wall and a flagstone material
 
 The original is in `examples/starter_large/`. `tools/build_starter_level.gd` rebuilds it
 deliberately out of order: enemies before floors, boundaries before anything to cut, floors dumped
@@ -32,10 +33,50 @@ it makes the level compliant. Its `BUILD_LOG.md` lists each step.
    follows from how many rooms you end up with: an Arena is 1 room; Small 5–9, Medium 10–14,
    Large 15–19, Huge 20–25. Corridors don't count.
 2. **Layer 1, Map.** Place the pieces:
-   - **Shapes**: Floor, Wall, Block, Ramp, Pillar.
-   - **Your models**: import them from Level > Import a model.
-   - **Room boundary** and **Invisible wall** (both drawn as faint boxes so you can see and grab them).
+   - **Shapes**: Floor, Wall, Block, Ramp, **Stairs**, **Curved wall**, Pillar.
+     - Stairs have a **Steps** count. Each step is height ÷ steps tall, and a Seeker can only climb
+       about 0.4 m, so if the navmesh doesn't continue up the flight, add steps (or make it lower
+       or longer) until it does.
+     - A curved wall has a **Bend** in degrees (0 is straight, 360 a full ring; negative bends the
+       other way). Its width is its length along the curve.
+   - **Decorations** and **Prefabs**: your own models. Use "+ Import a model..." in either (or
+     Level > Import a model) and pick which one it goes in. They're the same to the game; the split
+     is just to keep small dressing apart from bigger ready-made pieces.
+   - **Materials**: paint a shape or a model. Make one from an image ("+ New material from an
+     image..." or Level > New material), or tick "Also add its materials" when importing a model
+     to bring its textures along. Pick a material in the list, then click pieces to paint them
+     (click again to take it off), or set **Material** in the inspector. Materials are mapped
+     onto the world, so tiling stays even however you stretch a shape; **Tile** sets how many
+     metres one copy of the image covers. (A model's own materials keep the model's UVs instead.)
+
+     The material window has three tabs:
+     - **Colour**: colour image and tint, and transparency: **Cut-out** for leaves and fences,
+       **See-through** for glass and water. It's only visual; solid pieces still block the way.
+     - **Surface**: normal map, roughness, metallic and occlusion maps, each reading a channel
+       (a glTF packed image is occlusion red, roughness green, metallic blue), and a height map
+       (needs Mapping: the model's own UVs).
+     - **Glow**: a glow color, brightness and glow map.
+
+     Importing a model with "Also add its materials" brings all of these across.
+
+     ![The material window](docs/screenshots/material_window.png)
+   - **Invisible**: Room boundary and Invisible wall (both drawn as faint boxes so you can see and
+     grab them).
    - **Effects**: lights, fireflies, searchlights.
+
+   **Licenses** are optional. **Level > Licenses** is one place per level for the licenses of
+   what you bring in: add files (a pack's License.txt, a LICENSE, a PDF), or write one in the
+   editor. The import and material windows have an "Add a license file..." button for when
+   something comes with one. They're kept in the level's `licenses/` folder and go along with it
+   when you export or share it.
+
+   **Folders.** Right-click Decorations, Prefabs or Materials (or a folder) for a new folder;
+   folders nest and can be renamed or deleted (what's in a deleted folder moves up a level).
+   Drag things onto a folder to move them, or right-click > Move to folder. Click the arrows to
+   collapse what you aren't using; the editor remembers what's closed. Searching opens everything
+   that matches.
+
+![Stairs, a curved wall and a material](docs/screenshots/shapes_materials.png)
 3. **Every piece is a floor, an obstacle or intangible** ("Acts as" in the inspector):
    - **Floor**: solid; the navmesh is built on top of it.
    - **Obstacle**: solid; blocks the navmesh, and nothing walks on top of it or inside it.
@@ -94,7 +135,8 @@ Must fix, for example:
 - a closed door that nothing opens (give it a trigger, or tick "Stays locked on purpose")
 - a fight in a room that no longer exists
 - no exit teleporter, unknown enemies, empty waves, triggers pointing at deleted things
-- models without a license, or whose file is missing
+- models whose file is missing
+- materials whose image is missing, and pieces painted with a material that's gone
 
 Check, for example:
 - a room Seekers can't walk to from the start (bridges and moving platforms count as joining
@@ -107,7 +149,7 @@ Check, for example:
 ## Level format
 
 Format 2, described in the game repo's `docs/level_format.md`. `addons/seeker_data/level_data.gd` and
-`addons/seeker_data/level_nav.gd` are shared with the game and must stay identical in both repos.
+`addons/seeker_data/level_nav.gd` and `addons/seeker_data/level_materials.gd` are shared with the game and must stay identical in both repos.
 The navmesh, the rooms and the hitboxes come from the same code on both sides.
 
 ## Tests
@@ -115,6 +157,7 @@ The navmesh, the rooms and the hitboxes come from the same code on both sides.
 ```
 godot --headless --path . --script res://tests/editor_test.gd     # rooms, boundaries, sizes, surfaces, checks, saving
 godot --headless --path . --script res://tests/stress_test.gd     # the whole app through odd build orders
+godot --headless --path . --script res://tests/library_test.gd    # importing, folders, materials, stairs, curved walls
 xvfb-run godot --path . --resolution 1600x900 --script res://tests/ui_test.gd   # mouse: placing, the handles
 godot --headless --path . --script res://tools/build_starter_level.gd   # rebuilds examples/starter_large
 ```

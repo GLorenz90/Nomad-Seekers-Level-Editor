@@ -68,7 +68,17 @@ const WALL_BLOCKS := ["all", "seekers"]
 const ANIMATIONS := ["none", "sway", "bob", "spin", "pulse", "sweep"]
 ## Built-in shapes, so a level can be blocked out without importing anything.
 ## They're sized with "size"; imported models with "scale".
-const BUILTIN_PIECES := ["builtin:box", "builtin:cylinder", "builtin:ramp"]
+const BUILTIN_PIECES := ["builtin:box", "builtin:cylinder", "builtin:ramp", "builtin:curved_wall", "builtin:stairs"]
+## Shape settings (Grayson, 2026-11-13): a curved wall's "bend" in degrees
+## (its length runs along the curve), and the number of "steps" on stairs.
+const BEND_MAX := 360.0
+const STEPS_MAX := 64
+## Where imported models sit in the editor's palette (the game ignores it).
+const ASSET_CATEGORIES := ["decoration", "prefab"]
+const MODEL_FILES := ["glb", "gltf"]
+const TEXTURE_FILES := ["png", "jpg", "jpeg", "webp"]
+## The image keys of a material (map.materials; see LevelMaterials).
+const MATERIAL_IMAGES := ["albedo", "normal", "roughness_map", "metallic_map", "ao_map", "emission_map", "height_map"]
 ## Built-in effects (lights and particles), kept in map.decorations.
 const BUILTIN_DECOR := ["builtin:fireflies", "builtin:light", "builtin:searchlight"]
 
@@ -172,8 +182,8 @@ func _fill_defaults() -> void:
 		"author": "", "description": ""})
 	meta.erase("size")
 	map.merge({"grid": GRID, "lighting": {}, "start": {"pos": [0, 0, 0], "yaw": 0},
-		"assets": [], "pieces": [], "walls": [], "boundaries": [], "areas": [],
-		"decorations": []})
+		"assets": [], "materials": [], "folders": {}, "pieces": [], "walls": [], "boundaries": [],
+		"areas": [], "decorations": []})
 	map.lighting = clamp_lighting(map.lighting)
 	interaction.merge({"objects": [], "button_groups": [], "dialogues": [], "flags": {},
 		"rules": []})
@@ -277,6 +287,20 @@ func hitbox_of(piece: Dictionary) -> String:
 	return h if HITBOXES.has(h) else "concave"
 
 
+func find_material(id: String) -> Dictionary:
+	for m in map.materials:
+		if String(m.get("id", "")) == id:
+			return m
+	return {}
+
+
+## A file a level may load: inside its folder, with an allowed extension.
+static func safe_file(file: String, extensions: Array) -> bool:
+	return file != "" and not file.contains("..") and not file.is_absolute_path() \
+		and not file.begins_with("res:") and not file.begins_with("user:") \
+		and extensions.has(file.get_extension().to_lower())
+
+
 func find_asset(id: String) -> Dictionary:
 	for a in map.assets:
 		if String(a.get("id", "")) == id:
@@ -303,6 +327,8 @@ func ids() -> Dictionary:
 	var out := {}
 	for a in map.areas:
 		out[String(a.get("id", ""))] = String(a.get("kind", "room"))
+	for m in map.materials:
+		out[String(m.get("id", ""))] = "material"
 	for key in ["pieces", "walls", "boundaries", "decorations"]:
 		for p in map[key]:
 			out[String(p.get("id", ""))] = "boundary" if key == "boundaries" else key.trim_suffix("s")
@@ -421,10 +447,22 @@ func validate(known_enemies: PackedStringArray = PackedStringArray()) -> PackedS
 	var asset_ids := {}
 	for a in map.assets:
 		asset_ids[String(a.get("id", ""))] = true
-		if String(a.get("license", "")) == "":
-			out.append("Asset %s has no license." % a.get("id", "?"))
 		if a.has("surface") and not SURFACES.has(String(a.surface)):
 			out.append("Asset %s: unknown surface." % a.get("id", "?"))
+		if not safe_file(String(a.get("file", "")), MODEL_FILES):
+			out.append("Asset %s: its file must be a .glb or .gltf inside the level folder." % a.get("id", "?"))
+	for m in map.materials:
+		var mid := String(m.get("id", "?"))
+		for key in MATERIAL_IMAGES:
+			if String(m.get(key, "")) != "" and not safe_file(String(m[key]), TEXTURE_FILES):
+				out.append("Material %s: its %s image must be a .png, .jpg or .webp inside the level folder." % [mid, key])
+		if not LevelMaterials.MAPPINGS.has(String(m.get("mapping", "world"))):
+			out.append("Material %s: mapping must be world or uv." % mid)
+		if not LevelMaterials.TRANSPARENCY.has(String(m.get("transparency", "none"))):
+			out.append("Material %s: transparency must be none, alpha or cutout." % mid)
+		for key in ["roughness_channel", "metallic_channel", "ao_channel"]:
+			if m.has(key) and not LevelMaterials.CHANNELS.has(String(m[key])):
+				out.append("Material %s: %s must be red, green, blue, alpha or gray." % [mid, key])
 	for p in map.pieces:
 		var asset := String(p.get("asset", ""))
 		if asset.begins_with("builtin:"):
@@ -436,6 +474,12 @@ func validate(known_enemies: PackedStringArray = PackedStringArray()) -> PackedS
 			out.append("%s: unknown surface." % p.get("id", "?"))
 		if p.has("hitbox") and not HITBOXES.has(String(p.hitbox)):
 			out.append("%s: unknown hitbox." % p.get("id", "?"))
+		if String(p.get("material", "")) != "" and find_material(String(p.material)).is_empty():
+			out.append("%s uses a material that isn't in the level (%s)." % [p.get("id", "?"), p.material])
+		if p.has("steps") and (int(p.steps) < 1 or int(p.steps) > STEPS_MAX):
+			out.append("%s: stairs need 1-%d steps." % [p.get("id", "?"), STEPS_MAX])
+		if p.has("bend") and absf(float(p.bend)) > BEND_MAX:
+			out.append("%s: a curved wall bends at most %d degrees." % [p.get("id", "?"), int(BEND_MAX)])
 		if p.has("animation"):
 			if not ANIMATIONS.has(String(p.animation.get("preset", "none"))):
 				out.append("%s: unknown animation." % p.get("id", "?"))

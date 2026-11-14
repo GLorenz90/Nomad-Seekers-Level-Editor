@@ -255,6 +255,153 @@ func model_loader() -> Callable:
 	return func(asset_id: String) -> Node3D: return Models.instance(level, asset_id)
 
 
+# --- Library folders (the Place list's Decorations, Prefabs and Materials) --------------------
+# Imported models and materials can live in folders the builder names, nested
+# with "/" ("Forest/Trees"). Each model or material keeps its "folder"; empty
+# folders are remembered in map.folders. The game ignores both.
+
+const LIBRARY := ["decoration", "prefab", "material"]
+
+
+## The category an imported model or material is in.
+func library_category(entry: Dictionary, is_material := false) -> String:
+	if is_material:
+		return "material"
+	var c := String(entry.get("category", "prefab"))
+	return c if c in ["decoration", "prefab"] else "prefab"
+
+
+## Models and materials in a category: [{"id", "folder", "data", "material"}].
+func library_items(category: String) -> Array:
+	var out := []
+	if category == "material":
+		for m in level.map.get("materials", []):
+			out.append({"id": String(m.id), "folder": String(m.get("folder", "")), "data": m, "material": true})
+	else:
+		for a in level.map.assets:
+			if library_category(a) == category:
+				out.append({"id": String(a.id), "folder": String(a.get("folder", "")), "data": a, "material": false})
+	return out
+
+
+## Every folder path in a category, parents included, sorted.
+func library_folders(category: String) -> Array:
+	var found := {}
+	var stored: Array = level.map.get("folders", {}).get(category, [])
+	var all := stored.duplicate()
+	for it in library_items(category):
+		all.append(it.folder)
+	for path in all:
+		var parts := String(path).split("/", false)
+		for i in parts.size():
+			found["/".join(parts.slice(0, i + 1))] = true
+	var out := found.keys()
+	out.sort_custom(func(a, b): return String(a).naturalnocasecmp_to(String(b)) < 0)
+	return out
+
+
+static func clean_folder(path: String) -> String:
+	var parts := []
+	for part in path.replace("\\", "/").split("/", false):
+		var t := String(part).strip_edges()
+		if t != "":
+			parts.append(t)
+	return "/".join(parts)
+
+
+func add_folder(category: String, path: String) -> String:
+	path = clean_folder(path)
+	if path == "":
+		return ""
+	if not level.map.has("folders") or not (level.map.folders is Dictionary):
+		level.map.folders = {}
+	var list: Array = level.map.folders.get(category, [])
+	if not list.has(path):
+		list.append(path)
+	level.map.folders[category] = list
+	return path
+
+
+## Renames (or moves) a folder and everything under it.
+func rename_folder(category: String, old: String, new_path: String) -> void:
+	new_path = clean_folder(new_path)
+	if new_path == "" or new_path == old:
+		return
+	var swap := func(path: String) -> String:
+		if path == old:
+			return new_path
+		if path.begins_with(old + "/"):
+			return new_path + path.substr(old.length())
+		return path
+	for it in library_items(category):
+		if String(it.folder) != "":
+			it.data.folder = swap.call(String(it.folder))
+	var list: Array = level.map.get("folders", {}).get(category, [])
+	for i in list.size():
+		list[i] = swap.call(String(list[i]))
+	add_folder(category, new_path)
+
+
+## Deletes a folder: what was in it moves up to its parent.
+func delete_folder(category: String, path: String) -> void:
+	var parent := path.get_base_dir() if path.contains("/") else ""
+	for it in library_items(category):
+		var f := String(it.folder)
+		if f == path or f.begins_with(path + "/"):
+			var rest := f.substr(path.length()).trim_prefix("/")
+			var moved := parent.path_join(rest) if parent != "" else rest
+			if moved == "":
+				it.data.erase("folder")
+			else:
+				it.data.folder = moved
+	if level.map.has("folders") and level.map.folders is Dictionary:
+		var kept := []
+		for f in level.map.folders.get(category, []):
+			var fs := String(f)
+			if fs == path or fs.begins_with(path + "/"):
+				var rest := fs.substr(path.length()).trim_prefix("/")
+				if rest != "":
+					kept.append(parent.path_join(rest) if parent != "" else rest)
+			else:
+				kept.append(fs)
+		level.map.folders[category] = kept
+
+
+## Puts a model or material in a folder ("" for the top of its category).
+func set_folder(entry: Dictionary, path: String) -> void:
+	path = clean_folder(path)
+	if path == "":
+		entry.erase("folder")
+	else:
+		entry.folder = path
+
+
+## Removes a material; pieces painted with it go back to their color.
+func remove_material(id: String) -> void:
+	for p in level.map.pieces:
+		if String(p.get("material", "")) == id:
+			p.erase("material")
+	_erase_id(level.map.materials, id)
+
+
+## Pieces using an imported model.
+func uses_of_asset(id: String) -> int:
+	var n := 0
+	for p in level.map.pieces:
+		if String(p.get("asset", "")) == id:
+			n += 1
+	return n
+
+
+## Pieces painted with a material.
+func uses_of_material(id: String) -> int:
+	var n := 0
+	for p in level.map.pieces:
+		if String(p.get("material", "")) == id:
+			n += 1
+	return n
+
+
 ## Joins another area into this one (a room split by a pit or a low wall):
 ## its pieces of navmesh count as this area, and whatever pointed at it now
 ## points here. Its fight, if any, is dropped when this area has one.

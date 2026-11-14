@@ -492,6 +492,9 @@ func snap_pos(_kind: String, _d: Dictionary, p: Vector3) -> Vector3:
 func begin_place(entry: Dictionary) -> void:
 	cancel_place()
 	_placing = entry
+	if entry.kind == "material":
+		hint.emit("Painting with %s: click shapes or models to paint them. Click a painted one again to take it off. Esc or right-click to stop." % entry.title)
+		return
 	hint.emit("Click to place %s. R turns it a quarter turn while placing. Keep clicking to place more. Esc or right-click to stop." % entry.title)
 
 
@@ -530,6 +533,9 @@ func _template_at(entry: Dictionary, p: Vector3) -> Dictionary:
 
 
 func _move_ghost(at: Vector2) -> void:
+	if _placing.kind == "material":
+		_show_paint_target(pick_piece(at))
+		return
 	var p := surface_point(at)
 	if p == Vector3.INF:
 		return
@@ -545,6 +551,9 @@ func _move_ghost(at: Vector2) -> void:
 
 
 func _place(at: Vector2) -> void:
+	if _placing.kind == "material":
+		_paint(at)
+		return
 	var p := surface_point(at)
 	if p == Vector3.INF:
 		return
@@ -553,6 +562,51 @@ func _place(at: Vector2) -> void:
 	doc.select(id)
 	doc.commit()
 	placed.emit(id)
+
+
+## Paints the piece under the mouse with the material being painted (or
+## takes it off, if it already wears it).
+func _paint(at: Vector2) -> void:
+	var id := pick_piece(at)
+	var d := doc.find(id)
+	if d.is_empty():
+		return
+	var mat := String(_placing.data.get("material", ""))
+	if String(d.get("material", "")) == mat:
+		d.erase("material")
+		app.toast("Took %s off %s." % [_placing.title, doc.label_of(id)])
+	else:
+		d.material = mat
+		app.toast("Painted %s with %s." % [doc.label_of(id), _placing.title])
+	doc.commit()
+
+
+## Outlines the piece a click would paint.
+func _show_paint_target(id: String) -> void:
+	if _ghost:
+		_ghost.free()
+		_ghost = null
+	var it := doc.item(id)
+	if it.is_empty():
+		return
+	_ghost = ItemVisuals.lines(ItemVisuals.box_edges(Items.local_aabb(it.kind, it.data, doc.level).grow(0.05)), Color(0.4, 1.0, 0.6), true)
+	_ghost.transform = Items.xform(it.kind, it.data)
+	_vp.add_child(_ghost)
+
+
+## The piece (shape or model) under the mouse, on any layer ("" if none).
+func pick_piece(at: Vector2) -> String:
+	var ray := _ray(at)
+	var best := ""
+	var best_dist := INF
+	for p in doc.level.map.pieces:
+		var xf := Items.xform("piece", p)
+		var inv := xf.affine_inverse()
+		var hit = Items.local_aabb("piece", p, doc.level).intersects_ray(inv * (ray[0] as Vector3), inv.basis * (ray[1] as Vector3))
+		if hit != null and (xf * (hit as Vector3)).distance_to(ray[0]) < best_dist:
+			best_dist = (xf * (hit as Vector3)).distance_to(ray[0])
+			best = String(p.id)
+	return best
 
 
 # --- Mouse ------------------------------------------------------------------------------------

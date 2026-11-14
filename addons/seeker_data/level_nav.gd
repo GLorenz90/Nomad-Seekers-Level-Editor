@@ -38,8 +38,9 @@ static func new_navmesh() -> NavigationMesh:
 # --- Shapes and transforms ----------------------------------------------------------------------
 
 ## A built-in shape's meshes: [[Mesh, Transform3D], ...], pivot at the bottom
-## centre. Ramps rise toward -Z.
-static func builtin_meshes(asset: String, size: Vector3) -> Array:
+## centre. Ramps and stairs rise toward -Z. `params` holds a piece's shape
+## settings ("bend", "steps"); shape_params() picks them off a piece.
+static func builtin_meshes(asset: String, size: Vector3, params := {}) -> Array:
 	size = Vector3(maxf(size.x, 0.05), maxf(size.y, 0.05), maxf(size.z, 0.05))
 	var up := Transform3D(Basis(), Vector3(0, size.y * 0.5, 0))
 	match asset:
@@ -56,10 +57,92 @@ static func builtin_meshes(asset: String, size: Vector3) -> Array:
 			pm.left_to_right = 0.0
 			pm.size = Vector3(size.z, size.y, size.x)
 			return [[pm, Transform3D(Basis(Vector3.UP, PI * 0.5), up.origin)]]
-		_:
-			var bm := BoxMesh.new()
-			bm.size = size
-			return [[bm, up]]
+		"builtin:stairs":
+			return _stairs(size, int(params.get("steps", 8)))
+		"builtin:curved_wall":
+			var bend := clampf(float(params.get("bend", 90.0)), -LevelData.BEND_MAX, LevelData.BEND_MAX)
+			if absf(bend) >= 1.0:
+				return [[_curved_wall(size, bend), Transform3D.IDENTITY]]
+	var bm := BoxMesh.new()
+	bm.size = size
+	return [[bm, up]]
+
+
+## A piece's shape settings, for builtin_meshes.
+static func shape_params(piece: Dictionary) -> Dictionary:
+	var out := {}
+	if piece.has("bend"):
+		out.bend = float(piece.bend)
+	if piece.has("steps"):
+		out.steps = int(piece.steps)
+	return out
+
+
+## Solid stairs: `steps` boxes, each a step taller, rising toward -Z over
+## the size's depth to its full height. A step taller than LevelData.NAV.climb
+## (0.4 m) breaks the navmesh, so the number of steps decides whether
+## Seekers and enemies can walk up.
+static func _stairs(size: Vector3, steps: int) -> Array:
+	steps = clampi(steps, 1, LevelData.STEPS_MAX)
+	var out := []
+	var depth := size.z / steps
+	for i in steps:
+		var h := size.y * (i + 1) / steps
+		var bm := BoxMesh.new()
+		bm.size = Vector3(size.x, h, depth)
+		var z := size.z * 0.5 - depth * (i + 0.5)
+		out.append([bm, Transform3D(Basis(), Vector3(0, h * 0.5, z))])
+	return out
+
+
+## A wall bent along an arc. size.x is its length along the curve, size.y its
+## height, size.z its thickness; `bend` is how many degrees the arc turns.
+## A positive bend curves its ends toward its front (-Z). Pivot: the middle
+## of the curve, at the bottom.
+static func _curved_wall(size: Vector3, bend: float) -> ArrayMesh:
+	var turn := deg_to_rad(bend)
+	var radius := size.x / turn  # signed: the side the centre is on
+	var centre := Vector3(0, 0, -radius)
+	var segments := maxi(2, ceili(absf(bend) / 7.5))
+	var half_t := size.z * 0.5
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rings := []  # per step along the curve: [outer bottom, outer top, inner bottom, inner top, radial]
+	for k in segments + 1:
+		var a := -turn * 0.5 + turn * k / segments
+		var radial := Vector3(sin(a), 0, cos(a)) * signf(radius)
+		var mid := centre + Vector3(sin(a), 0, cos(a)) * radius
+		var outer := mid + radial * half_t
+		var inner := mid - radial * half_t
+		rings.append([outer, outer + Vector3(0, size.y, 0), inner, inner + Vector3(0, size.y, 0), radial])
+	for k in segments:
+		var r0: Array = rings[k]
+		var r1: Array = rings[k + 1]
+		_quad(st, [r0[0], r1[0], r1[1], r0[1]], [r0[4], r1[4], r1[4], r0[4]])  # outside face
+		_quad(st, [r0[2], r1[2], r1[3], r0[3]], [-r0[4], -r1[4], -r1[4], -r0[4]])  # inside face
+		_quad(st, [r0[1], r1[1], r1[3], r0[3]], [Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP])  # top
+		_quad(st, [r0[0], r1[0], r1[2], r0[2]], [Vector3.DOWN, Vector3.DOWN, Vector3.DOWN, Vector3.DOWN])  # bottom
+	for end in [[0, 1], [segments, segments - 1]]:  # end caps, facing away from the wall
+		var r: Array = rings[end[0]]
+		var n: Array = rings[end[1]]
+		var away := (((r[0] as Vector3) + (r[2] as Vector3)) - ((n[0] as Vector3) + (n[2] as Vector3))).normalized()
+		_quad(st, [r[0], r[2], r[3], r[1]], [away, away, away, away])
+	return st.commit()
+
+
+## Adds a quad facing along its normals (Godot draws clockwise faces).
+static func _quad(st: SurfaceTool, pts: Array, normals: Array) -> void:
+	var a: Vector3 = pts[0]
+	var b: Vector3 = pts[1]
+	var c: Vector3 = pts[2]
+	var facing: Vector3 = normals[0] + normals[1] + normals[2] + normals[3]
+	var order := [0, 1, 2, 0, 2, 3]
+	if (b - a).cross(c - a).dot(facing) > 0.0:
+		order = [0, 2, 1, 0, 3, 2]
+	for i in order:
+		st.set_normal(normals[i])
+		st.set_uv(Vector2((pts[i] as Vector3).x + (pts[i] as Vector3).z, (pts[i] as Vector3).y))
+		st.add_vertex(pts[i])
 
 
 ## Where a piece (or wall, boundary, decoration) sits: pos, rot (degrees, the
@@ -95,7 +178,7 @@ static func piece_meshes(piece: Dictionary, loader: Callable) -> Array:
 	var asset := String(piece.get("asset", "builtin:box"))
 	var local: Array
 	if asset.begins_with("builtin:"):
-		local = builtin_meshes(asset, LevelData.vec3(piece.get("size"), Vector3(4, 0.5, 4)))
+		local = builtin_meshes(asset, LevelData.vec3(piece.get("size"), Vector3(4, 0.5, 4)), shape_params(piece))
 	else:
 		var model = loader.call(asset) if loader.is_valid() else null
 		if model == null:
@@ -146,7 +229,7 @@ static func hitbox(piece: Dictionary, level: LevelData, loader: Callable) -> Dic
 	var asset := String(piece.get("asset", "builtin:box"))
 	var local: Array
 	if asset.begins_with("builtin:"):
-		local = builtin_meshes(asset, LevelData.vec3(piece.get("size"), Vector3(4, 0.5, 4)))
+		local = builtin_meshes(asset, LevelData.vec3(piece.get("size"), Vector3(4, 0.5, 4)), shape_params(piece))
 	else:
 		var model = loader.call(asset) if loader.is_valid() else null
 		if model == null:

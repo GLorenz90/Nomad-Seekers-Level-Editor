@@ -127,7 +127,9 @@ func _build() -> void:
 		["Settings...", dialogs.settings], ["Quit", func() -> void: dialogs.leave_level(func() -> void: get_tree().quit())]])
 	_menu(bar, "Level", [["Level settings...", func() -> void: _need_doc(dialogs.level_settings)],
 		["Imported models...", func() -> void: _need_doc(dialogs.models)],
-		["Import a model...", func() -> void: _need_doc(dialogs.import_model)], [],
+		["Import a model...", func() -> void: _need_doc(dialogs.import_model)],
+		["New material from an image...", func() -> void: _need_doc(dialogs.import_material)],
+		["Licenses...", func() -> void: _need_doc(dialogs.licenses)], [],
 		["Playtest in the game   F5", playtest]])
 	_view_menu = _menu(bar, "View", [["Top-down view   Numpad 7", func() -> void: toggle_top()],
 		["Show the other layers' things", func() -> void: _toggle_view_option(1)],
