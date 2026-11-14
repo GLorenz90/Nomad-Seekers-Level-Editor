@@ -130,7 +130,7 @@ static func _build_model(root: Node3D, kind: String, d: Dictionary, doc: EditorD
 
 
 ## Returns the height of the object's top (for its name tag).
-static func _build_object(root: Node3D, d: Dictionary, _doc: EditorDoc) -> float:
+static func _build_object(root: Node3D, d: Dictionary, doc: EditorDoc) -> float:
 	match String(d.get("type", "")):
 		"door":
 			var s := LevelData.vec3(d.get("size"), Vector3(4.2, 4.0, 0.6))
@@ -202,6 +202,31 @@ static func _build_object(root: Node3D, d: Dictionary, _doc: EditorDoc) -> float
 			if not line.is_empty():
 				root.add_child(lines(line, Color(0.6, 0.85, 1.0)))
 			return 1.0
+		"person":
+			var look: Dictionary = d.get("look", {}) if d.get("look") is Dictionary else {}
+			var height := clampf(float(look.get("height", 1.8)), 0.5, 4.0)
+			var model_id := String(look.get("model", ""))
+			var model: Node3D = doc.model_loader().call(model_id) if model_id != "" else null
+			if model:
+				root.add_child(model)
+			else:
+				root.add_child(_at(_capsule(0.32, height * 0.78, _color(look.get("color"), Color(0.45, 0.55, 0.75))), Vector3(0, height * 0.39, 0)))
+				root.add_child(_at(_sphere(height * 0.11, height * 0.22, Color(0.86, 0.72, 0.6)), Vector3(0, height * 0.88, 0)))
+			root.add_child(_at(_box(Vector3(0.12, 0.12, 0.4), Color(1, 1, 1, 0.8)), Vector3(0, height * 0.88, -0.3)))
+			var route: Dictionary = d.get("route", {}) if d.get("route") is Dictionary else {}
+			var pts: Array = route.get("points", [])
+			if pts.size() >= 2:
+				var inv := root.transform.affine_inverse()
+				var line := PackedVector3Array()
+				for i in pts.size():
+					var p := inv * (LevelData.vec3(pts[i]) + Vector3(0, 0.15, 0))
+					var q := inv * (LevelData.vec3(pts[(i + 1) % pts.size()]) + Vector3(0, 0.15, 0))
+					if i < pts.size() - 1 or String(route.get("mode", "loop")) == "loop":
+						line.append(p)
+						line.append(q)
+					root.add_child(_at(_label("walk %d" % (i + 1), Color(0.9, 0.85, 0.6), 18), p + Vector3(0, 0.4, 0)))
+				root.add_child(lines(line, Color(0.95, 0.8, 0.4)))
+			return height
 		"bridge":
 			var w := float(d.get("width", 4.0))
 			var l := float(d.get("length", 8.0))

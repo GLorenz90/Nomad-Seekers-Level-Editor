@@ -20,6 +20,8 @@ const EVENTS := [
 	["node_broken", "A Lumidium crystal is broken", "lumidium_node"],
 	["timer_done", "A timer runs out", "timer"],
 	["flag_set", "A flag is set", "flag"],
+	["talked", "Someone is talked to", "person"],
+	["step_completed", "A quest step is done", "step"],
 ]
 
 ## [action, menu text, object types it can target ("" = no target)].
@@ -33,7 +35,7 @@ const ACTIONS := [
 	["extend", "Extend a bridge", "bridge"],
 	["retract", "Retract a bridge", "bridge"],
 	["start", "Start a platform moving", "platform"],
-	["stop", "Stop a platform", "platform"],
+	["stop", "Stop a platform, or someone walking", "platform,person"],
 	["step", "Move a platform one stop", "platform"],
 	["wake", "Wake a teleporter", "teleporter"],
 	["start_dialogue", "Start a dialogue", "dialogue"],
@@ -42,12 +44,25 @@ const ACTIONS := [
 	["set_flag", "Set a flag", ""],
 	["start_timer", "Start a timer", ""],
 	["give_item", "Give each Seeker an item", ""],
-	["complete_objective", "Complete a quest objective", ""],
+	["complete_objective", "Complete a quest objective (old quests)", ""],
+	["complete_step", "Complete a quest step", "step"],
+	["set_quest_flag", "Set a quest flag (lasts the whole quest)", ""],
+	["take_item", "Take an item from the Seeker who talked", ""],
+	["show", "Bring someone in", "person"],
+	["hide", "Send someone away", "person"],
+	["walk", "Have someone walk their route", "person"],
+	["set_talk", "Change what someone says", "person"],
+	["escort", "Have someone follow the party (escort)", "person"],
+	["stop_escort", "Stop an escort", "escort"],
 ]
+
+const ITEMS := [["oro", "Oro"], ["hp_gel", "HP Gel"], ["lp_cell", "LP Cell"], ["cure_salt", "Cure Salt"],
+	["trap_scanner", "Trap Scanner"], ["lumidium", "Lumidium (carried)"]]
 
 const VERBS := {"open": "open", "close": "close", "toggle": "switch", "start_combat": "start the fight in",
 	"disable": "turn off", "enable": "turn on", "extend": "extend", "retract": "retract", "start": "start",
-	"stop": "stop", "step": "move", "wake": "wake", "start_dialogue": "start"}
+	"stop": "stop", "step": "move", "wake": "wake", "start_dialogue": "start", "show": "bring in",
+	"hide": "send away", "stop_escort": "stop escorting"}
 
 
 static func event_row(event: String) -> Array:
@@ -100,6 +115,22 @@ static func candidates(kinds: String, doc: EditorDoc) -> Array:
 			"flag":
 				for flag in doc.level.interaction.flags:
 					out.append([String(flag), "Flag \"%s\"" % flag])
+			"step":
+				if doc.quest:
+					for st in doc.quest.step_options():
+						out.append([st[0], "Step " + String(st[1])])
+			"escort":
+				# People here, and the quest's people on Nomad-2 (escorts
+				# come along to its levels).
+				var seen := {}
+				for o in doc.level.interaction.objects:
+					if String(o.get("type", "")) == "person":
+						seen[String(o.id)] = true
+						out.append([String(o.id), doc.label_of(String(o.id))])
+				if doc.quest and not doc.is_nomad2():
+					for o in doc.quest.nomad2_people():
+						if not seen.has(String(o.get("id", ""))):
+							out.append([String(o.id), "%s (%s, from Nomad-2)" % [String(o.get("name", o.id)), o.id]])
 			_:
 				for o in doc.level.interaction.objects:
 					if String(o.get("type", "")) == kind:
@@ -171,7 +202,19 @@ static func _when_text(when: Dictionary, doc: EditorDoc) -> String:
 			return "timer \"%s\" runs out" % source
 		"flag_set":
 			return "flag \"%s\" is set" % source
+		"talked":
+			return "a Seeker talks to %s" % who
+		"step_completed":
+			return "quest step %s is done" % _step_name(source, doc)
 	return "?"
+
+
+static func _step_name(id: String, doc: EditorDoc) -> String:
+	if doc and doc.quest:
+		for st in doc.quest.step_options():
+			if st[0] == id:
+				return "\"%s\"" % st[1]
+	return "\"%s\"" % id
 
 
 static func _check_text(c: Dictionary) -> String:
@@ -184,7 +227,26 @@ static func _check_text(c: Dictionary) -> String:
 			return "there are %d or more Seekers" % int(c.get("value", 1))
 		"quest_active":
 			return "quest \"%s\" is active" % c.get("value", "?")
+		"quest_step":
+			var state: String = {"current": "is the current step", "not_done": "isn't done yet"}.get(String(c.get("is", "done")), "is done")
+			return "quest step \"%s\" %s" % [c.get("step", "?"), state]
+		"quest_flag":
+			return "quest flag \"%s\" is %s" % [c.get("flag", "?"), "on" if c.get("is", true) else "off"]
+		"has_item":
+			return "the Seeker %s %d %s" % ["has" if c.get("is", true) else "doesn't have", int(c.get("amount", 1)), _item_name(c)]
+		"escort_near":
+			return "%s is %swithin %s m" % [c.get("target", "?"), "" if c.get("is", true) else "not ", str(c.get("distance", 8))]
 	return "?"
+
+
+static func _item_name(d: Dictionary) -> String:
+	var item := String(d.get("item", "oro"))
+	if item == "lumidium":
+		return "%s Lumidium" % String(d.get("color", "raw")).capitalize()
+	for row in ITEMS:
+		if row[0] == item:
+			return row[1]
+	return item.replace("_", " ")
 
 
 static func _action_text(a: Dictionary, doc: EditorDoc) -> String:
@@ -202,6 +264,18 @@ static func _action_text(a: Dictionary, doc: EditorDoc) -> String:
 			return "give %d %s" % [int(a.get("amount", 1)), String(a.get("item", "?")).replace("_", " ")]
 		"complete_objective":
 			return "complete quest objective \"%s\"" % a.get("key", "?")
+		"complete_step":
+			return "complete quest step %s" % _step_name(String(a.get("target", a.get("step", ""))), doc)
+		"set_quest_flag":
+			return "set quest flag \"%s\" %s" % [a.get("flag", "?"), "on" if a.get("value", true) else "off"]
+		"take_item":
+			return "take %d %s" % [int(a.get("amount", 1)), _item_name(a)]
+		"walk", "escort":
+			var who := String(a.get("target", ""))
+			return ("have %s walk their route" if action == "walk" else "have %s follow the party") % (doc.label_of(who) if who != "" else "?")
+		"set_talk":
+			var target_id := String(a.get("target", ""))
+			return "have %s say %s" % [doc.label_of(target_id) if target_id != "" else "?", doc.label_of(String(a.get("dialogue", "")))]
 	var target := String(a.get("target", ""))
 	var text := "%s %s" % [VERBS.get(action, action), doc.label_of(target) if target != "" else "?"]
 	if action == "step":

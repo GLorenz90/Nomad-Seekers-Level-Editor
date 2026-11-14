@@ -14,7 +14,7 @@ const LAYER_HELP := {
 const OBJECT_NAMES := {"door": "Door", "teleporter": "Teleporter", "lumidium_depot": "Lumidium depot",
 	"lumidium_node": "Lumidium crystal", "box": "Supply box", "trap": "Trap", "button": "Button",
 	"hazard": "Room hazard", "trigger_zone": "Trigger zone", "platform": "Moving platform",
-	"bridge": "Bridge"}
+	"bridge": "Bridge", "person": "Person"}
 
 const FLOOR_COLOR := [0.42, 0.45, 0.4]
 const WALL_COLOR := [0.5, 0.5, 0.56]
@@ -30,6 +30,10 @@ const HITBOX_NAMES := {"concave": "Concave (follows every triangle)", "convex": 
 ## Bundled enemy list, used until the game folder is set (then the game's own
 ## data/enemies folder is read, so new enemies show up by themselves).
 const ENEMY_FILE := "res://catalog/enemies.json"
+
+## The open level's quest steps ([[id, label]...]; empty outside a quest),
+## for fields that name a step. Set by the app when a level opens.
+static var quest_steps: Array = []
 
 static var _enemies: Array = []
 static var _enemies_from := "?"
@@ -105,6 +109,8 @@ static func palette(layer: int, doc: EditorDoc) -> Array:
 				"object", {"type": "button", "mode": "floor"}, "Triggers"))
 			out.append(_entry("Trigger zone", "An invisible box that fires when a Seeker walks in: start a dialogue, a fight, anything.",
 				"object", {"type": "trigger_zone", "size": [4, 3, 4], "once": true}, "Triggers"))
+			out.append(_entry("Person", "Someone to talk to. Choose what they say (it can change with the quest's steps), when they're around, and a route to walk. Triggers can have them hand over or take items, or follow the party as an escort.",
+				"object", {"type": "person", "name": "Someone", "look": {"color": [0.45, 0.55, 0.75], "height": 1.8}, "talk": []}, "People"))
 			out.append(_entry("Supply box", "A breakable box that drops Oro or an item.", "object",
 				{"type": "box", "contents": "random"}, "Resources"))
 			out.append(_entry("Lumidium crystal", "A crystal deposit Seekers break for Lumidium.", "object",
@@ -243,6 +249,8 @@ static func type_name(kind: String, d: Dictionary) -> String:
 				return "Floor plate" if String(d.get("mode", "press")) == "floor" else "Button"
 			if type == "hazard":
 				return "Darkness" if String(d.get("kind", "")) == "darkness" else "Poison mist"
+			if type == "person" and String(d.get("name", "")) != "":
+				return String(d.name)
 			return OBJECT_NAMES.get(type, type.capitalize())
 		"enemy":
 			var e := enemy(String(d.get("enemy", "")))
@@ -276,6 +284,9 @@ static func id_prefix(kind: String, d: Dictionary) -> String:
 				return "plate"
 			if type == "hazard":
 				return "darkness" if String(d.get("kind", "")) == "darkness" else "mist"
+			if type == "person" and String(d.get("name", "")) != "" and String(d.name) != "Someone":
+				var first := EditorDoc.slug(String(d.name).get_slice(" ", 0))
+				return first if first != "level" else "person"
 			return {"lumidium_depot": "depot", "lumidium_node": "crystal", "trigger_zone": "zone"}.get(type, type)
 		"enemy":
 			var parts := String(d.get("enemy", "enemy")).split("_")
@@ -392,7 +403,7 @@ static func fields(kind: String, d: Dictionary, level: LevelData = null) -> Arra
 			f.append({"k": "rot", "l": "Rotation (degrees)", "t": "vec3", "step": 15})
 			f.append({"k": "size", "l": "Size (wide, tall)", "t": "vec2", "step": 0.5, "min": 0.5})
 		"object":
-			f.append_array(_object_fields(d))
+			f.append_array(_object_fields(d, level))
 		"enemy":
 			var options := []
 			for e in enemies():
@@ -417,7 +428,7 @@ static func fields(kind: String, d: Dictionary, level: LevelData = null) -> Arra
 	return f
 
 
-static func _object_fields(d: Dictionary) -> Array:
+static func _object_fields(d: Dictionary, level: LevelData = null) -> Array:
 	var f := []
 	var type := String(d.get("type", ""))
 	if type != "platform" and type != "hazard":
@@ -463,6 +474,29 @@ static func _object_fields(d: Dictionary) -> Array:
 			f.append({"k": "wait", "l": "Wait at each stop (s)", "t": "float", "min": 0, "max": 30, "step": 0.5, "def": 1.0})
 			f.append({"k": "running", "l": "Moving at the start", "t": "bool", "def": true})
 			f.append({"k": "color", "l": "Color", "t": "color", "def": [0.45, 0.5, 0.6]})
+		"person":
+			f.append({"k": "name", "l": "Name", "t": "text", "tip": "Shown over their head, and in their talk prompt (\"Talk to ...\")."})
+			f.append({"k": "look.color", "l": "Color", "t": "color", "def": [0.45, 0.55, 0.75], "tip": "Their stand-in's colour (until they have a model)."})
+			f.append({"k": "look.height", "l": "Height (m)", "t": "float", "min": 0.5, "max": 4, "step": 0.1, "def": 1.8})
+			var models := [["", "None (a plain figure)"]]
+			if level:
+				for a in level.map.assets:
+					models.append([String(a.id), String(a.id).capitalize()])
+			f.append({"k": "look.model", "l": "Model", "t": "enum", "o": models, "def": "", "unset_empty": true,
+				"tip": "One of your imported models (Decorations or Prefabs) to stand in for them."})
+			if not quest_steps.is_empty():
+				var steps := [["", "The start of the quest"]]
+				for st in quest_steps:
+					steps.append([st[0], "Step " + String(st[1])])
+				var until := [["", "The end of the quest"]]
+				for st in quest_steps:
+					until.append([st[0], "Step " + String(st[1])])
+				f.append({"k": "show_from", "l": "Around from", "t": "enum", "o": steps, "def": "", "unset_empty": true,
+					"tip": "They appear once this step is done (or from the start)."})
+				f.append({"k": "show_until", "l": "Gone after", "t": "enum", "o": until, "def": "", "unset_empty": true,
+					"tip": "They leave once this step is done (or stay to the end)."})
+			f.append({"k": "walking", "l": "Walks their route from the start", "t": "bool",
+				"tip": "Off: they stand still until a trigger tells them to walk. Set the route below."})
 		"bridge":
 			f.append({"k": "length", "l": "Length (m)", "t": "float", "min": 1, "max": 64, "step": 1})
 			f.append({"k": "width", "l": "Width (m)", "t": "float", "min": 1, "max": 16, "step": 0.5})

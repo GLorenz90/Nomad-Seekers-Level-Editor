@@ -94,7 +94,11 @@ const LIGHT_LIMITS := {
 
 ## Layer 2 object types.
 const OBJECT_TYPES := ["door", "teleporter", "lumidium_depot", "lumidium_node", "box",
-	"trap", "button", "hazard", "trigger_zone", "platform", "bridge"]
+	"trap", "button", "hazard", "trigger_zone", "platform", "bridge", "person"]
+## level.json "kind": an ordinary level, or a quest's Nomad-2 overlay (laid
+## over Nomad-2 by HubLevel: no start, exit or rooms of its own).
+const KINDS := ["level", "nomad2"]
+const PERSON_ROUTES := ["loop", "back_and_forth"]
 const TRAP_KINDS := ["damage", "slow", "shock", "poison", "confuse", "freeze", "stun"]
 const HAZARD_KINDS := ["poison_mist", "darkness"]
 const LUMIDIUM_COLORS := ["fire", "ice", "lightning", "nature", "light", "dark", "raw"]
@@ -103,14 +107,19 @@ const PLATFORM_MODES := ["loop", "ping_pong", "step"]
 ## Wiring: when <event> from <source>, if <conditions>, do <actions>.
 const EVENTS := ["level_started", "entered", "pressed", "combat_started", "wave_cleared",
 	"combat_ended", "enemy_defeated", "health_below", "dialogue_ended", "box_broken",
-	"node_broken", "timer_done", "flag_set", "party_present"]
-const CONDITIONS := ["flag", "difficulty_at_least", "party_at_least", "quest_active"]
+	"node_broken", "timer_done", "flag_set", "party_present", "talked", "step_completed"]
+const CONDITIONS := ["flag", "difficulty_at_least", "party_at_least", "quest_active",
+	"quest_step", "quest_flag", "has_item", "escort_near"]
 const ACTIONS := ["open", "close", "toggle", "enable", "disable", "start_combat",
 	"start", "stop", "step", "extend", "retract", "wake", "start_dialogue", "set_flag",
-	"start_timer", "give_item", "complete_objective", "banner", "wait"]
+	"start_timer", "give_item", "complete_objective", "banner", "wait",
+	"complete_step", "set_quest_flag", "take_item", "show", "hide", "walk", "set_talk", "escort", "stop_escort"]
 ## Actions that need a target object.
 const TARGETED := ["open", "close", "toggle", "enable", "disable", "start_combat",
-	"start", "stop", "step", "extend", "retract", "wake", "start_dialogue"]
+	"start", "stop", "step", "extend", "retract", "wake", "start_dialogue",
+	"show", "hide", "walk", "set_talk", "escort"]
+## stop_escort and escort_near can name a quest's person from Nomad-2 who
+## isn't placed in this level (escorts come along), so they aren't checked.
 const DIFFICULTIES := ["normal", "hard", "very_hard", "ultimate"]
 
 ## Layer 3. Aggro range presets (scale the enemy's own aggro_range).
@@ -412,14 +421,17 @@ func validate(known_enemies: PackedStringArray = PackedStringArray()) -> PackedS
 	if int(meta.get("format", FORMAT)) < FORMAT:
 		out.append("Made with an older editor (format %d). Levels from before format 2 have to be rebuilt." % int(meta.format))
 	var rooms := room_count()
-	if size() == "":
+	var is_overlay := String(meta.get("kind", "level")) == "nomad2"
+	if is_overlay:
+		pass  # laid over Nomad-2: no rooms, start or exit of its own
+	elif size() == "":
 		out.append("%d rooms fits no size: an Arena is 1 room, the others take 5-25." % rooms)
 	elif size() == "arena" and corridor_count() > 0:
 		out.append("An Arena is one room with no corridors.")
 	for a in map.areas:
 		if (a.get("polys", []) as Array).is_empty():
 			out.append("%s has no navmesh saved with it. Open and save the level in the editor." % a.get("id", "?"))
-	if not map.has("start") or not (map.start.get("pos") is Array):
+	if not is_overlay and (not map.has("start") or not (map.start.get("pos") is Array)):
 		out.append("No start point.")
 
 	# Ids: present and unique across every layer.
@@ -518,7 +530,20 @@ func validate(known_enemies: PackedStringArray = PackedStringArray()) -> PackedS
 			"platform":
 				if (o.get("points", []) as Array).size() < 2:
 					out.append("Platform %s needs at least 2 points." % id)
-	if exits == 0:
+			"person":
+				for t in o.get("talk", []):
+					var said := String(t.get("dialogue", "")) if t is Dictionary else ""
+					if said != "" and known.get(said, "") != "dialogue":
+						out.append("Person %s says %s, which isn't a dialogue." % [id, said])
+				var route = o.get("route")
+				if route is Dictionary:
+					if (route.get("points", []) as Array).size() < 2:
+						out.append("Person %s's walk needs at least 2 points." % id)
+					if not PERSON_ROUTES.has(String(route.get("mode", "loop"))):
+						out.append("Person %s's walk must loop or go back_and_forth." % id)
+	if not KINDS.has(String(meta.get("kind", "level"))):
+		out.append("level.json: kind must be level or nomad2.")
+	if exits == 0 and String(meta.get("kind", "level")) != "nomad2":
 		out.append("No exit: add a teleporter with a destination.")
 	for g in interaction.button_groups:
 		for b in g.get("buttons", []):
@@ -530,7 +555,7 @@ func validate(known_enemies: PackedStringArray = PackedStringArray()) -> PackedS
 		if not EVENTS.has(String(when.get("event", ""))):
 			out.append("Rule %s: unknown event." % rid)
 		var source := String(when.get("source", ""))
-		if source != "" and not known.has(source) and String(when.event) not in ["timer_done", "flag_set"]:
+		if source != "" and not known.has(source) and String(when.event) not in ["timer_done", "flag_set", "step_completed"]:
 			out.append("Rule %s listens to %s, which doesn't exist." % [rid, source])
 		for c in rule.get("if", []):
 			if not CONDITIONS.has(String(c.get("check", ""))):

@@ -121,7 +121,40 @@ func rebuild() -> void:
 		var node := ItemVisuals.build(it.kind, it.data, doc, mine, layer)
 		_items.add_child(node)
 		_nodes[it.id] = node
+	_draw_base()
 	refresh_overlay()
+
+
+## Nomad-2 under a quest's additions: its floor, walls, counters, signs and
+## spots, drawn but not selectable (it's fixed; the quest adds on top).
+func _draw_base() -> void:
+	if doc.base.is_empty():
+		return
+	var root := Node3D.new()
+	root.name = "Nomad2"
+	_items.add_child(root)
+	for p in doc.base_pieces():
+		root.add_child(ItemVisuals.build("piece", p, doc, false, 1))
+	for l in doc.base.get("labels", []):
+		var sign := Label3D.new()
+		sign.text = String(l.get("text", ""))
+		sign.position = LevelData.vec3(l.get("pos"))
+		sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		sign.font_size = clampi(int(l.get("size", 48)), 16, 160)
+		sign.pixel_size = 0.01
+		sign.outline_size = 10
+		sign.modulate = Color(0.85, 0.9, 1.0, 0.85)
+		root.add_child(sign)
+	var marks := {"start": [Color(0.25, 0.9, 0.45), "Seekers arrive"], "teleporter": [Color(0.4, 0.8, 1.0), "Teleporter"],
+		"depot": [Color(0.9, 0.75, 0.3), "Lumidium depot"], "clerk": [Color(0.75, 0.75, 0.85), ""]}
+	for m in doc.base.get("markers", []):
+		var spec: Array = marks.get(String(m.get("type", "")), [Color.WHITE, ""])
+		var at := LevelData.vec3(m.get("pos"))
+		var disc := ItemVisuals._at(ItemVisuals._box(Vector3(1.6, 0.06, 1.6), spec[0], 0.5), at + Vector3(0, 0.03, 0))
+		root.add_child(disc)
+		var tag := ItemVisuals._label(String(m.get("name", "")) if spec[1] == "" else String(spec[1]), spec[0], 22)
+		tag.position = at + Vector3(0, 1.4, 0)
+		root.add_child(tag)
 
 
 ## Rebuilds one item's stand-in (while it's being resized), leaving the rest.
@@ -461,7 +494,7 @@ func surface_point(at: Vector2) -> Vector3:
 	var ray := _ray(at)
 	var best := Vector3.INF
 	var best_dist := INF
-	for p in doc.level.map.pieces:
+	for p in doc.solid_pieces():
 		if doc.level.surface_of(p) == "intangible":
 			continue
 		var xf := Items.xform("piece", p)

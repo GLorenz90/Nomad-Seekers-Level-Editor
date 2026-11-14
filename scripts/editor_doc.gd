@@ -32,14 +32,25 @@ var _last_time := 0
 ## with its "area" id: {"mesh": NavigationMesh, "islands": [...]}.
 var nav := {}
 var nav_stale := true
+## The quest this level belongs to (its nomad2/ or levels/<name>/), or null.
+var quest: QuestDoc
+## A quest's Nomad-2 additions (level.json kind "nomad2") sit on a read-only
+## copy of Nomad-2 (catalog/nomad2_base.json): its pieces, signs and spots.
+var base := {}
+
+const NOMAD2_BASE := "res://catalog/nomad2_base.json"
+static var _nomad2_cache := {}
 
 
 # --- Opening and saving -----------------------------------------------------------------------
 
-static func create(level_name: String, area: String, dir: String) -> EditorDoc:
+static func create(level_name: String, area: String, dir: String, kind := "level") -> EditorDoc:
 	var doc := EditorDoc.new()
 	doc.level = LevelData.create(level_name, area)
 	doc.level.dir = dir
+	if kind != "level":
+		doc.level.meta.kind = kind
+	doc._attach()
 	doc._reset_history()
 	return doc
 
@@ -51,8 +62,54 @@ static func open(dir: String) -> EditorDoc:
 		return null
 	var doc := EditorDoc.new()
 	doc.level = data
+	doc._attach()
 	doc._reset_history()
 	return doc
+
+
+## Finds the level's quest and, for a Nomad-2 overlay, Nomad-2's copy.
+func _attach() -> void:
+	quest = QuestDoc.find_for(level.dir)
+	base = nomad2_base() if is_nomad2() else {}
+
+
+func is_nomad2() -> bool:
+	return String(level.meta.get("kind", "level")) == "nomad2"
+
+
+## The read-only copy of Nomad-2 ({} if the file is missing).
+static func nomad2_base() -> Dictionary:
+	if _nomad2_cache.is_empty() and FileAccess.file_exists(NOMAD2_BASE):
+		var parsed = JSON.parse_string(FileAccess.get_file_as_string(NOMAD2_BASE))
+		if parsed is Dictionary:
+			_nomad2_cache = parsed
+	return _nomad2_cache
+
+
+## Nomad-2's own pieces (empty for ordinary levels).
+func base_pieces() -> Array:
+	return base.get("pieces", [])
+
+
+## Every solid piece to stand things on: the level's and Nomad-2's.
+func solid_pieces() -> Array:
+	return base_pieces() + level.map.pieces
+
+
+## The level the navmesh is baked from: Nomad-2's pieces under an overlay.
+## Its areas are its own (an overlay keeps no rooms).
+func nav_level() -> LevelData:
+	if base_pieces().is_empty():
+		return level
+	var copy := LevelData.new()
+	copy.dir = level.dir
+	copy.meta = level.meta
+	copy.map = level.map.duplicate()
+	copy.map.pieces = base_pieces() + level.map.pieces
+	copy.map.areas = []
+	copy.interaction = level.interaction
+	copy.combat = level.combat
+	return copy
 
 
 func save() -> Error:
@@ -237,11 +294,12 @@ func update_nav(force := false) -> void:
 	if not nav_stale and not force:
 		return
 	nav_stale = false
-	var parts := LevelNav.collect(level, model_loader())
-	var mesh := LevelNav.bake(level, Callable(), false, parts)
-	var cut := LevelNav.bake(level, Callable(), true, parts)
+	var source := nav_level()
+	var parts := LevelNav.collect(source, model_loader())
+	var mesh := LevelNav.bake(source, Callable(), false, parts)
+	var cut := LevelNav.bake(source, Callable(), true, parts)
 	var before: int = level.map.areas.size()
-	var found := LevelNav.assign_areas(level, cut)
+	var found := LevelNav.assign_areas(source, cut)
 	nav = {"mesh": mesh, "islands": found.islands, "added": found.added, "removed": found.removed}
 	if not found.added.is_empty() or not found.removed.is_empty() or before != level.map.areas.size():
 		if selected != "" and kind_of(selected) == "":
@@ -773,6 +831,13 @@ func rules_about(id: String) -> Dictionary:
 			if String(a.get("target", "")) == id and not onto.has(rule):
 				onto.append(rule)
 	return {"from": from, "onto": onto}
+
+
+## A new dialogue with one empty line from `speaker`; returns its id.
+func add_dialogue(speaker := "") -> String:
+	var id := new_id("dialogue")
+	level.interaction.dialogues.append({"id": id, "lines": [{"speaker": speaker, "text": ""}]})
+	return id
 
 
 func find_dialogue(id: String) -> Dictionary:
