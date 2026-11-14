@@ -134,6 +134,22 @@ func _init() -> void:
 	check(texts(LevelCheck.run(doc)).contains("completes quest step \"made_up\""), "completing a step the quest lacks is caught")
 	saved_rule["do"][1].target = "deliver"
 	doc.commit()
+	var story_rule := {"id": "", "when": {"event": "talked", "source": pid}, "if": [{"check": "story_flag", "flag": "foreman_friend", "is": true}],
+		"do": [{"action": "set_story_flag", "flag": "met_rina", "value": true}]}
+	check(Wiring.describe(story_rule, doc).contains("story flag \"foreman_friend\" is on") and Wiring.describe(story_rule, doc).contains("set story flag \"met_rina\" on"),
+		"story flags read as sentences")
+	doc.find(pid).talk.append({"dialogue": did, "flag": "", "story": true})
+	doc.commit()
+	check(texts(LevelCheck.run(doc)).contains("waits on a flag with no name"), "a line waiting on an unnamed flag is caught")
+	doc.find(pid).talk[2].flag = "foreman_friend"
+	doc.commit()
+	doc.select(pid)
+	await settle(4)
+	var says := []
+	for o in app.inspector.find_children("*", "OptionButton", true, false):
+		says.append((o as OptionButton).get_item_text((o as OptionButton).selected))
+	check(says.has("When a story flag is...") and says.has("After step 3: Take Lapis to the beacon at the survey site."),
+		"what they say: lines by step and by flag")
 	doc.save()
 
 	# --- Quest details ---------------------------------------------------------------------------
@@ -143,6 +159,17 @@ func _init() -> void:
 	check(details != null and details.title.begins_with("Quest:"), "Quest details opens")
 	var goals := details.find_children("*", "LineEdit", true, false).map(func(e): return (e as LineEdit).text) if details else []
 	check(goals.has("Talk to Foreman Petram Solidus by the teleporter.") and goals.has("Survey site"), "with its steps and areas")
+	var detail_labels := details.find_children("*", "Label", true, false).map(func(l): return (l as Label).text) if details else []
+	var detail_options := []
+	for o in (details.find_children("*", "OptionButton", true, false) if details else []):
+		detail_options.append((o as OptionButton).get_item_text((o as OptionButton).selected))
+	check(detail_labels.has("ENDINGS") and detail_labels.has("OFFERED ONLY IF") and detail_labels.has("Ending 2  (the default: no conditions)"),
+		"Quest details has endings and story-flag requirements")
+	check(detail_options.any(func(t): return String(t).begins_with("After step 2:")) and detail_options.any(func(t): return String(t).begins_with("After step 3:")),
+		"each area says when it opens (in order: %s)" % ", ".join(detail_options.filter(func(t): return String(t).begins_with("After"))))
+	var opened: Dictionary = app.quests._data.endings[0]
+	check(int(opened.get("reward", 0)) == 1000 and opened.sets.has("foreman_friend") and opened["if"][0].flag == "gave_crew",
+		"the crew ending: its flag, reward and story flag")
 	app.quests._data.reward = 950
 	(app.quests._data.steps as Array).append({"id": "report_back", "type": "event", "goal": "Tell the foreman."})
 	details.confirmed.emit()
@@ -150,6 +177,15 @@ func _init() -> void:
 	var reread := QuestDoc.open(dir)
 	check(int(reread.data.reward) == 950 and reread.steps().size() == 5, "saving writes quest.json")
 	check(Catalog.quest_steps.size() == 5, "and the editor picks up the new step")
+
+	var probe := QuestDoc.new()
+	probe.data = reread.data.duplicate(true)
+	probe.data.areas[0].opens_after = "nope"
+	probe.data.endings.reverse()
+	probe.data.requires = [{"flag": "", "is": true}]
+	var found := "\n".join(probe.problems())
+	check(found.contains("opens after step \"nope\"") and found.contains("can never be reached") and found.contains("names no story flag"),
+		"the quest check catches a bad unlock, an unreachable ending and a blank requirement")
 
 	# --- Its own level ---------------------------------------------------------------------------
 	app.open_path(dir.path_join("levels/survey_site"))

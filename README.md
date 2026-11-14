@@ -112,21 +112,25 @@ Quests work like PSO's: **accepting one at the Guild starts a quest session**. N
 - **Quest > New quest** makes a quest folder (in your library's `quests` folder) and opens **its Nomad-2**: a fixed copy of Nomad-2 (floor, walls, counters, signs, teleporter, depot and where Seekers arrive) that you build on. You can't move Nomad-2 itself; you add people, props and lights, plus their dialogue and triggers. Nomad-2 is peaceful, so it has no Combat layer.
 - **Quest > Quest details** holds the title, client, briefing, reward, the **steps** and **where the teleporter goes**.
   - Steps can be: *done by a trigger* (talking to someone, a hand-over, reaching a spot), *defeat a number of an enemy*, *clear every room of an area*, or *bank Lumidium*.
-  - Where it goes: areas from the game (a fresh pick each time, or a level you name) and the quest's own levels.
+  - Where it goes: areas from the game (a fresh pick each time, or a level you name) and the quest's own levels. Each has an **Opens** setting: right away, after a step, or when a quest flag is on. Use it for set maps done in order with steps between them (talk to someone to open the next map).
+  - **Endings:** the text told at the Guild, picked by quest flags or story flags (the first that holds; keep the one with no conditions last). Each can pay its own reward and set **story flags**, which stay with the characters after the quest.
+  - **Offered only if:** story flags a character must have (or not) for the Guild to list the quest.
 - **Quest > New level for this quest** makes a level that only this quest uses (with a floor and a teleporter back), and adds it to where the teleporter goes. **Quest > The quest's Nomad-2 and levels** switches between them.
 - **People** (Interaction layer, *People*): a name, a colour or one of your models, and a height.
-  - **What they say:** one or more dialogues, each taking over once a step is done.
+  - **What they say:** one or more dialogues. Each takes over once a step is done, or while a quest flag or story flag is on (or off).
   - **Around from / Gone after:** steps, so they show up or leave as the quest goes on.
   - **Walk route:** a loop, or back and forth.
 - **Quest triggers**, available in the quest's Nomad-2 and its levels:
   - **Sets it off:** *someone is talked to*, *a quest step is done*.
-  - **Checks:** *quest step is done / current / not done yet*, *a quest flag*, *the Seeker who talked has an item*, *an escort is near*.
-  - **Actions:** *complete a quest step*, *set a quest flag* (it lasts the whole quest), *take an item* (deliveries), *give an item*, *bring someone in / send them away*, *have them walk*, *change what they say*, *have them follow the party (escort)*, and *stop an escort*. Escorts come along to the quest's levels, so a level's triggers can check that they're near.
+  - **Checks:** *quest step is done / current / not done yet*, *a quest flag*, *a story flag*, *the Seeker who talked has an item*, *an escort is near*.
+  - **Actions:** *complete a quest step*, *set a quest flag* (it lasts the whole quest), *set a story flag* (kept after the quest), *take an item* (deliveries), *give an item*, *bring someone in / send them away*, *have them walk*, *change what they say*, *have them follow the party (escort)*, and *stop an escort*. Escorts come along to the quest's levels, so a level's triggers can check that they're near.
 - **Quest > Check and export the quest** checks the quest and every part of it, then writes the whole folder into the game's `quests` folder, where the Guild lists it. **Quest > Playtest the quest** starts it on Nomad-2 in the game.
 
 ![A quest's Nomad-2: the foreman walking his route among the quest's crates](docs/screenshots/quest_nomad2.png)
 
 ![Quest details](docs/screenshots/quest_details.png)
+
+![Areas opening in order, and endings](docs/screenshots/quest_endings.png)
 
 The game's `quests/foremans_favour` is a worked example. Open it with Quest > Open a quest.
 

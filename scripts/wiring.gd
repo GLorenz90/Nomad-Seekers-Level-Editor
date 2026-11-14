@@ -47,6 +47,7 @@ const ACTIONS := [
 	["complete_objective", "Complete a quest objective (old quests)", ""],
 	["complete_step", "Complete a quest step", "step"],
 	["set_quest_flag", "Set a quest flag (lasts the whole quest)", ""],
+	["set_story_flag", "Set a story flag (kept after the quest)", ""],
 	["take_item", "Take an item from the Seeker who talked", ""],
 	["show", "Bring someone in", "person"],
 	["hide", "Send someone away", "person"],
@@ -232,6 +233,8 @@ static func _check_text(c: Dictionary) -> String:
 			return "quest step \"%s\" %s" % [c.get("step", "?"), state]
 		"quest_flag":
 			return "quest flag \"%s\" is %s" % [c.get("flag", "?"), "on" if c.get("is", true) else "off"]
+		"story_flag":
+			return "story flag \"%s\" is %s" % [c.get("flag", "?"), "on" if c.get("is", true) else "off"]
 		"has_item":
 			return "the Seeker %s %d %s" % ["has" if c.get("is", true) else "doesn't have", int(c.get("amount", 1)), _item_name(c)]
 		"escort_near":
@@ -268,6 +271,8 @@ static func _action_text(a: Dictionary, doc: EditorDoc) -> String:
 			return "complete quest step %s" % _step_name(String(a.get("target", a.get("step", ""))), doc)
 		"set_quest_flag":
 			return "set quest flag \"%s\" %s" % [a.get("flag", "?"), "on" if a.get("value", true) else "off"]
+		"set_story_flag":
+			return "set story flag \"%s\" %s" % [a.get("flag", "?"), "on" if a.get("value", true) else "off"]
 		"take_item":
 			return "take %d %s" % [int(a.get("amount", 1)), _item_name(a)]
 		"walk", "escort":
