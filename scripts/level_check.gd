@@ -224,6 +224,8 @@ static func _check_interaction(doc: EditorDoc, out: Array) -> void:
 						_add(out, "error", "%s has lines for quest step \"%s\", which the quest doesn't have." % [name, from], id, 2)
 					elif t is Dictionary and String(t.get("dialogue", "")) == "":
 						_add(out, "error", "%s has a line with no dialogue chosen." % name, id, 2)
+					elif t is Dictionary and t.has("flag") and String(t.flag) == "":
+						_add(out, "error", "%s has a line that waits on a flag with no name." % name, id, 2)
 			"door":
 				var opened := _targets(rules, id, ["open", "toggle"])
 				var closed := _targets(rules, id, ["close", "toggle"])
@@ -427,9 +429,9 @@ static func _check_rules(doc: EditorDoc, out: Array) -> void:
 					var known_people := Wiring.candidates("escort", doc).map(func(c): return c[0])
 					if who == "" or not known_people.has(who):
 						_add(out, "error", "%s stops escorting \"%s\", who isn't here or on the quest's Nomad-2." % [what, who], rid, 2)
-				"set_quest_flag":
+				"set_quest_flag", "set_story_flag":
 					if String(a.get("flag", "")) == "":
-						_add(out, "error", "%s sets a quest flag with no name." % what, rid, 2)
+						_add(out, "error", "%s sets a %s flag with no name." % [what, "quest" if action == "set_quest_flag" else "story"], rid, 2)
 				"set_talk":
 					if doc.find_dialogue(String(a.get("dialogue", ""))).is_empty():
 						_add(out, "error", "%s changes what someone says, but no dialogue is chosen." % what, rid, 2)

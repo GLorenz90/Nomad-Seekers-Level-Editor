@@ -109,11 +109,11 @@ const EVENTS := ["level_started", "entered", "pressed", "combat_started", "wave_
 	"combat_ended", "enemy_defeated", "health_below", "dialogue_ended", "box_broken",
 	"node_broken", "timer_done", "flag_set", "party_present", "talked", "step_completed"]
 const CONDITIONS := ["flag", "difficulty_at_least", "party_at_least", "quest_active",
-	"quest_step", "quest_flag", "has_item", "escort_near"]
+	"quest_step", "quest_flag", "has_item", "escort_near", "story_flag"]
 const ACTIONS := ["open", "close", "toggle", "enable", "disable", "start_combat",
 	"start", "stop", "step", "extend", "retract", "wake", "start_dialogue", "set_flag",
 	"start_timer", "give_item", "complete_objective", "banner", "wait",
-	"complete_step", "set_quest_flag", "take_item", "show", "hide", "walk", "set_talk", "escort", "stop_escort"]
+	"complete_step", "set_quest_flag", "set_story_flag", "take_item", "show", "hide", "walk", "set_talk", "escort", "stop_escort"]
 ## Actions that need a target object.
 const TARGETED := ["open", "close", "toggle", "enable", "disable", "start_combat",
 	"start", "stop", "step", "extend", "retract", "wake", "start_dialogue",

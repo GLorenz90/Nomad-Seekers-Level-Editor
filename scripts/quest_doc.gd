@@ -156,4 +156,23 @@ func problems() -> PackedStringArray:
 			out.append("The quest goes to its level \"%s\", which isn't in its levels folder." % own)
 		if own == "" and String(a.get("area", "")) == "":
 			out.append("One of the quest's areas has no area or level chosen.")
+		var after := String(a.get("opens_after", ""))
+		if after != "" and not has_step(after):
+			out.append("\"%s\" opens after step \"%s\", which the quest doesn't have." % [a.get("name", "An area"), after])
+		if a.has("opens_with") and String(a.opens_with) == "":
+			out.append("\"%s\" opens with a quest flag, but no flag is named." % a.get("name", "An area"))
+	var endings: Array = data.get("endings", [])
+	for i in endings.size():
+		var e: Dictionary = endings[i]
+		for c in e.get("if", []):
+			if String(c.get("flag", "")) == "":
+				out.append("Ending %d checks a flag with no name." % (i + 1))
+		for k in (e.get("sets", {}) as Dictionary):
+			if String(k) == "":
+				out.append("Ending %d sets a story flag with no name." % (i + 1))
+		if (e.get("if", []) as Array).is_empty() and i < endings.size() - 1:
+			out.append("Ending %d has no conditions, so the endings after it can never be reached. Move it last." % (i + 1))
+	for c in data.get("requires", []):
+		if String(c.get("flag", "")) == "":
+			out.append("\"Offered only if\" names no story flag.")
 	return out

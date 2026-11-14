@@ -1237,7 +1237,7 @@ func _new_action(action: String) -> Dictionary:
 			a.amount = 100
 		"complete_objective":
 			a.key = ""
-		"set_quest_flag":
+		"set_quest_flag", "set_story_flag":
 			a.flag = ""
 			a.value = true
 		"take_item":
@@ -1299,7 +1299,7 @@ func _action_row(actions: Array, i: int, touch: Callable) -> Control:
 			row.add_child(seconds)
 		"banner":
 			row.add_child(_text(a, "text", "What it says", touch))
-		"set_flag", "set_quest_flag":
+		"set_flag", "set_quest_flag", "set_story_flag":
 			row.add_child(_text(a, "flag", "flag name", touch))
 			var value := CheckBox.new()
 			value.text = "on"
@@ -1379,7 +1379,7 @@ func _condition_row(checks: Array, i: int, touch: Callable) -> Control:
 	var row := HBoxContainer.new()
 	var kinds := [["flag", "A flag is"], ["party_at_least", "The party has at least"],
 		["difficulty_at_least", "The difficulty is at least"], ["quest_active", "This quest is active"],
-		["has_item", "The Seeker who talked has"]]
+		["has_item", "The Seeker who talked has"], ["story_flag", "A story flag is"]]
 	if doc.quest:
 		kinds.append_array([["quest_step", "Quest step"], ["quest_flag", "A quest flag is"], ["escort_near", "An escort is near"]])
 	var pick := _options(kinds, String(c.get("check", "flag")))
@@ -1387,7 +1387,7 @@ func _condition_row(checks: Array, i: int, touch: Callable) -> Control:
 		var check := String(pick.get_item_metadata(index))
 		checks[i] = {"check": check}
 		match check:
-			"flag", "quest_flag":
+			"flag", "quest_flag", "story_flag":
 				checks[i].merge({"flag": "", "is": true})
 			"party_at_least":
 				checks[i].value = 2
@@ -1406,7 +1406,7 @@ func _condition_row(checks: Array, i: int, touch: Callable) -> Control:
 		_fill_rule())
 	row.add_child(pick)
 	match String(c.get("check", "")):
-		"quest_flag":
+		"quest_flag", "story_flag":
 			row.add_child(_text(c, "flag", "flag name", touch))
 			var on := CheckBox.new()
 			on.text = "on"

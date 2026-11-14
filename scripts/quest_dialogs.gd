@@ -282,6 +282,7 @@ func _fill_details(box: VBoxContainer, data: Dictionary, rebuild: Callable) -> v
 			areas.remove_at(i)
 			rebuild.call()))
 		box.add_child(row)
+		box.add_child(_opens_row(a, rebuild))
 	var add_row := HBoxContainer.new()
 	add_row.add_child(_small_button("Add an area from the game", func() -> void:
 		areas.append({"area": game_areas[0] if not game_areas.is_empty() else "", "name": ""})
@@ -291,6 +292,22 @@ func _fill_details(box: VBoxContainer, data: Dictionary, rebuild: Callable) -> v
 			areas.append({"quest_level": q.levels()[0], "name": q.levels()[0].capitalize()})
 			rebuild.call()))
 	box.add_child(add_row)
+
+	_endings_section(box, data, rebuild)
+
+	# Offered only if.
+	box.add_child(HSeparator.new())
+	box.add_child(dialogs._label("OFFERED ONLY IF", false, 14))
+	box.add_child(dialogs._label("Story flags the character must have (or not) for the Guild to list this quest, so earlier choices can open or close quests. Leave empty to always offer it.", true))
+	var requires: Array = data.get("requires", [])
+	data.requires = requires
+	for i in requires.size():
+		box.add_child(_flag_row(requires[i], false, func() -> void:
+			requires.remove_at(i)
+			rebuild.call()))
+	box.add_child(_small_button("Add a story flag it needs", func() -> void:
+		requires.append({"flag": "", "is": true})
+		rebuild.call()))
 
 	# What's left to do.
 	var temp := QuestDoc.new()
@@ -303,6 +320,193 @@ func _fill_details(box: VBoxContainer, data: Dictionary, rebuild: Callable) -> v
 			var label := dialogs._label("Must fix: " + p, false)
 			label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.45))
 			box.add_child(label)
+
+
+## "Opens: right away / after step N / when a quest flag is on" for an area.
+func _opens_row(a: Dictionary, rebuild: Callable) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var gap := Control.new()
+	gap.custom_minimum_size.x = 24
+	row.add_child(gap)
+	var label := Label.new()
+	label.text = "Opens"
+	row.add_child(label)
+	var modes := [["", "Right away"]]
+	var q := QuestDoc.new()
+	q.data = _data
+	for st in q.step_options():
+		modes.append(["step:" + String(st[0]), "After step " + String(st[1]).replace(". ", ": ")])
+	modes.append(["flag", "When a quest flag is on"])
+	var mode := "flag" if a.has("opens_with") else ("step:" + String(a.opens_after) if String(a.get("opens_after", "")) != "" else "")
+	var pick := Dialogs._options(modes, mode)
+	pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pick.clip_text = true
+	pick.tooltip_text = "Nomad-2's teleporter lists this area once it's open, and a banner says so. Use it to send the party through the quest's maps in order."
+	pick.item_selected.connect(func(index: int) -> void:
+		var v := String(pick.get_item_metadata(index))
+		a.erase("opens_after")
+		a.erase("opens_with")
+		if v.begins_with("step:"):
+			a.opens_after = v.trim_prefix("step:")
+		elif v == "flag":
+			a.opens_with = ""
+		rebuild.call())
+	row.add_child(pick)
+	if a.has("opens_with"):
+		var flag := LineEdit.new()
+		flag.text = String(a.opens_with)
+		flag.placeholder_text = "quest flag (set by a trigger)"
+		flag.custom_minimum_size.x = 200
+		flag.text_changed.connect(func(t: String) -> void: a.opens_with = t.strip_edges())
+		row.add_child(flag)
+	return row
+
+
+## [flag name] [quest flag / story flag] [is on] [X] for a condition.
+func _flag_row(c: Dictionary, can_be_quest: bool, on_remove: Callable) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var gap := Control.new()
+	gap.custom_minimum_size.x = 24
+	row.add_child(gap)
+	var name := LineEdit.new()
+	name.text = String(c.get("flag", ""))
+	name.placeholder_text = "flag name"
+	name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name.text_changed.connect(func(t: String) -> void: c.flag = t.strip_edges())
+	row.add_child(name)
+	if can_be_quest:
+		var kind := Dialogs._options([["quest", "quest flag"], ["story", "story flag"]], "story" if bool(c.get("story", false)) else "quest")
+		kind.item_selected.connect(func(index: int) -> void:
+			if String(kind.get_item_metadata(index)) == "story":
+				c.story = true
+			else:
+				c.erase("story"))
+		row.add_child(kind)
+	var on := CheckBox.new()
+	on.text = "is on"
+	on.tooltip_text = "Untick for \"is off\"."
+	on.button_pressed = bool(c.get("is", true))
+	on.toggled.connect(func(v: bool) -> void: c["is"] = v)
+	row.add_child(on)
+	row.add_child(_small_button("X", on_remove))
+	return row
+
+
+## Endings: told at the report, picked by flags; each can have its own
+## reward and set story flags.
+func _endings_section(box: VBoxContainer, data: Dictionary, rebuild: Callable) -> void:
+	box.add_child(HSeparator.new())
+	box.add_child(dialogs._label("ENDINGS", false, 14))
+	box.add_child(dialogs._label("Told at the Guild when the quest is reported. The first ending whose flags all hold is the one told, so put the one with no conditions last as the default. An ending can pay its own reward and set story flags, which stay with every Seeker in the party for later quests.", true))
+	var endings: Array = data.get("endings", [])
+	data.endings = endings
+	for i in endings.size():
+		var e: Dictionary = endings[i]
+		var head := HBoxContainer.new()
+		var title := Label.new()
+		title.text = "Ending %d%s" % [i + 1, "  (the default: no conditions)" if (e.get("if", []) as Array).is_empty() else ""]
+		title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(title)
+		if i > 0:
+			head.add_child(_small_button("Up", func() -> void:
+				endings[i] = endings[i - 1]
+				endings[i - 1] = e
+				rebuild.call()))
+		head.add_child(_small_button("X", func() -> void:
+			endings.remove_at(i)
+			rebuild.call()))
+		box.add_child(head)
+		var text := TextEdit.new()
+		text.text = String(e.get("text", ""))
+		text.placeholder_text = "What happened, as the Guild tells it."
+		text.custom_minimum_size = Vector2(0, 64)
+		text.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+		text.text_changed.connect(func() -> void: e.text = text.text)
+		box.add_child(text)
+		var reward_row := HBoxContainer.new()
+		var own := CheckBox.new()
+		own.text = "Its own reward"
+		own.button_pressed = e.has("reward")
+		reward_row.add_child(own)
+		var reward := SpinBox.new()
+		reward.max_value = 999999
+		reward.step = 10
+		reward.suffix = "Oro"
+		reward.value = float(e.get("reward", data.get("reward", 0)))
+		reward.custom_minimum_size.x = 150
+		reward.editable = e.has("reward")
+		reward.value_changed.connect(func(v: float) -> void: e.reward = int(v))
+		own.toggled.connect(func(v: bool) -> void:
+			if v:
+				e.reward = int(reward.value)
+			else:
+				e.erase("reward")
+			reward.editable = v)
+		reward_row.add_child(reward)
+		box.add_child(reward_row)
+		var conds: Array = e.get("if", [])
+		e["if"] = conds
+		if not conds.is_empty():
+			box.add_child(dialogs._label("When:", false))
+		for j in conds.size():
+			box.add_child(_flag_row(conds[j], true, func() -> void:
+				conds.remove_at(j)
+				rebuild.call()))
+		var sets: Dictionary = e.get("sets", {})
+		e.sets = sets
+		if not sets.is_empty():
+			box.add_child(dialogs._label("Sets story flags:", false))
+		for k in sets.keys():
+			var key: String = k
+			var row := HBoxContainer.new()
+			var gap := Control.new()
+			gap.custom_minimum_size.x = 24
+			row.add_child(gap)
+			var name := LineEdit.new()
+			name.text = key
+			name.placeholder_text = "story flag"
+			name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			name.text_submitted.connect(func(t: String) -> void:
+				_rename_key(sets, key, t.strip_edges())
+				rebuild.call())
+			name.focus_exited.connect(func() -> void:
+				if name.text.strip_edges() != key:
+					_rename_key(sets, key, name.text.strip_edges())
+					rebuild.call.call_deferred())
+			row.add_child(name)
+			var on := CheckBox.new()
+			on.text = "on"
+			on.button_pressed = bool(sets[key])
+			on.toggled.connect(func(v: bool) -> void: sets[key] = v)
+			row.add_child(on)
+			row.add_child(_small_button("X", func() -> void:
+				sets.erase(key)
+				rebuild.call()))
+			box.add_child(row)
+		var adds := HBoxContainer.new()
+		adds.add_child(_small_button("Add a condition", func() -> void:
+			conds.append({"flag": "", "is": true})
+			rebuild.call()))
+		adds.add_child(_small_button("Add a story flag it sets", func() -> void:
+			var n := 1
+			while sets.has("story_flag_%d" % n):
+				n += 1
+			sets["story_flag_%d" % n] = true
+			rebuild.call()))
+		box.add_child(adds)
+	box.add_child(_small_button("Add an ending", func() -> void:
+		endings.append({"text": "", "if": []})
+		rebuild.call()))
+
+
+## Renames a dictionary key in place, keeping its value ("" removes it).
+static func _rename_key(d: Dictionary, old: String, new: String) -> void:
+	if old == new or not d.has(old):
+		return
+	var value: Variant = d[old]
+	d.erase(old)
+	if new != "" and not d.has(new):
+		d[new] = value
 
 
 func _count(s: Dictionary) -> SpinBox:

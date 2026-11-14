@@ -557,8 +557,8 @@ func _talk_section(id: String, d: Dictionary) -> void:
 		dialogues.append([String(dl.id), doc.label_of(String(dl.id))])
 	if talk.is_empty():
 		_note("Nothing yet. Pick a dialogue they say when a Seeker presses A on them. Make dialogues in the Dialogue tab below.")
-	elif not Catalog.quest_steps.is_empty():
-		_note("Later lines take over as the quest goes on: the last one whose step is done is what they say.")
+	else:
+		_note("Later lines take over: the last line whose step or flag holds is what they say.")
 	for i in talk.size():
 		var t: Dictionary = talk[i]
 		var row := HBoxContainer.new()
@@ -572,18 +572,57 @@ func _talk_section(id: String, d: Dictionary) -> void:
 			talk.remove_at(i)
 			_commit(id + ":talk", true)))
 		_box.add_child(row)
+		# When this line takes over: from the start, once a step is done,
+		# or while a quest flag / story flag is on (or off).
+		var modes := [["", "From the start"]]
+		for st in Catalog.quest_steps:
+			modes.append(["step:" + String(st[0]), "After step " + String(st[1]).replace(". ", ": ")])
 		if not Catalog.quest_steps.is_empty():
-			var steps := [["", "From the start"]]
-			for st in Catalog.quest_steps:
-				steps.append([st[0], "Once step %s is done" % st[1]])
-			var when := _options(steps, String(t.get("from_step", "")), func(v: Variant) -> void:
-				if String(v) == "":
-					t.erase("from_step")
+			modes.append(["flag", "When a quest flag is..."])
+		modes.append(["story", "When a story flag is..."])
+		var mode := ""
+		if t.has("flag"):
+			mode = "story" if bool(t.get("story", false)) else "flag"
+		elif String(t.get("from_step", "")) != "":
+			mode = "step:" + String(t.from_step)
+		var when := _options(modes, mode, func(v: Variant) -> void:
+			var picked := String(v)
+			t.erase("from_step")
+			if picked.begins_with("step:"):
+				t.from_step = picked.trim_prefix("step:")
+			if picked == "flag" or picked == "story":
+				t.flag = String(t.get("flag", ""))
+				t.flag_is = bool(t.get("flag_is", true))
+				if picked == "story":
+					t.story = true
 				else:
-					t.from_step = String(v)
+					t.erase("story")
+			else:
+				t.erase("flag")
+				t.erase("flag_is")
+				t.erase("story")
+			_commit(id + ":talk%d" % i, true))
+		when.tooltip_text = "When this line takes over. Quest flags last the quest; story flags stay with the character after it."
+		_row("  Says it", when)
+		if mode == "flag" or mode == "story":
+			var flag_row := HBoxContainer.new()
+			var flag_name := LineEdit.new()
+			flag_name.text = String(t.get("flag", ""))
+			flag_name.placeholder_text = "flag name"
+			flag_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			flag_name.text_changed.connect(func(text: String) -> void:
+				t.flag = text.strip_edges()
+				_commit(id + ":talkflag%d" % i))
+			flag_row.add_child(flag_name)
+			var on := CheckBox.new()
+			on.text = "is on"
+			on.tooltip_text = "Untick for \"while it's off\"."
+			on.button_pressed = bool(t.get("flag_is", true))
+			on.toggled.connect(func(v: bool) -> void:
+				t.flag_is = v
 				_commit(id + ":talk%d" % i))
-			when.tooltip_text = "When this takes over."
-			_row("  Says it", when)
+			flag_row.add_child(on)
+			_row("  Flag", flag_row)
 	_box.add_child(_button("Add what they say", "Pick a dialogue for them.", func() -> void:
 		talk.append({"dialogue": String(dialogues[1][0]) if dialogues.size() > 1 else ""})
 		_commit(id + ":talk", true)))
